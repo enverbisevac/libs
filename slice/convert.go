@@ -7,13 +7,18 @@ import (
 	"github.com/enverbisevac/libs/timeutil"
 )
 
-func StrTo[T ~int64 | ~float64 | ~bool | time.Time](slice []string) ([]T, error) {
+func StrTo[T ~int | ~int64 | ~float64 | ~bool | time.Time](slice []string) ([]T, error) {
 	var (
 		val T
 		f   func(str string) (any, error)
 	)
 
 	switch any(val).(type) {
+	case int:
+		f = func(str string) (any, error) {
+			v, err := strconv.ParseInt(str, 10, 32)
+			return int(v), err
+		}
 	case int64:
 		f = func(str string) (any, error) {
 			return strconv.ParseInt(str, 10, 64)

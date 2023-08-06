@@ -12,8 +12,8 @@ import (
 )
 
 type ParamTypes interface {
-	~string | ~int64 | ~bool | ~float64 | time.Time |
-		~[]string | ~[]int64 | ~[]bool | ~[]float64 | ~[]time.Time
+	~string | ~int | ~int64 | ~bool | ~float64 | time.Time |
+		~[]string | ~[]int | ~[]int64 | ~[]bool | ~[]float64 | ~[]time.Time
 }
 
 type FromConstraint interface {
@@ -22,7 +22,6 @@ type FromConstraint interface {
 
 func QueryParamOrDefault[T ParamTypes, K FromConstraint](from K, param string, defValue T, validators ...validator.Validator[T]) (T, error) {
 	var (
-		zero   T
 		result any
 		err    error
 		values url.Values
@@ -50,6 +49,9 @@ func QueryParamOrDefault[T ParamTypes, K FromConstraint](from K, param string, d
 	switch any(defValue).(type) {
 	case string:
 		result = paramValue
+	case int:
+		result, err = strconv.ParseInt(paramValue, 10, 32)
+		result = int(result.(int64))
 	case int64:
 		result, err = strconv.ParseInt(paramValue, 10, 64)
 	case bool:
@@ -60,6 +62,8 @@ func QueryParamOrDefault[T ParamTypes, K FromConstraint](from K, param string, d
 		result, err = timeutil.DefaultParserFunc(paramValue)
 	case []string:
 		result = paramValues
+	case []int:
+		result, err = slice.StrTo[int](paramValues)
 	case []int64:
 		result, err = slice.StrTo[int64](paramValues)
 	case []float64:
@@ -73,7 +77,7 @@ func QueryParamOrDefault[T ParamTypes, K FromConstraint](from K, param string, d
 	}
 
 	if err != nil {
-		return zero, err
+		return defValue, err
 	}
 
 	// check if value is validated or return default value
