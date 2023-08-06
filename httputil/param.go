@@ -4,14 +4,16 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/enverbisevac/libs/slice"
+	"github.com/enverbisevac/libs/timeutil"
 	"github.com/enverbisevac/libs/validator"
 )
 
 type ParamTypes interface {
-	~string | ~int64 | ~bool | ~float64 |
-		~[]string | ~[]int64 | ~[]bool | ~[]float64
+	~string | ~int64 | ~bool | ~float64 | time.Time |
+		~[]string | ~[]int64 | ~[]bool | ~[]float64 | ~[]time.Time
 }
 
 type FromConstraint interface {
@@ -54,6 +56,8 @@ func QueryParamOrDefault[T ParamTypes, K FromConstraint](from K, param string, d
 		result, err = strconv.ParseBool(paramValue)
 	case float64:
 		result, err = strconv.ParseFloat(paramValue, 64)
+	case time.Time:
+		result, err = timeutil.DefaultParserFunc(paramValue)
 	case []string:
 		result = paramValues
 	case []int64:
@@ -62,6 +66,8 @@ func QueryParamOrDefault[T ParamTypes, K FromConstraint](from K, param string, d
 		result, err = slice.StrTo[float64](paramValues)
 	case []bool:
 		result, err = slice.StrTo[bool](paramValues)
+	case []time.Time:
+		result, err = slice.StrTo[time.Time](paramValues)
 	default:
 		result = defValue
 	}

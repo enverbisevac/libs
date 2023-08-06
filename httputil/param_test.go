@@ -5,12 +5,15 @@ import (
 	"net/http"
 	"reflect"
 	"testing"
+	"time"
 
+	"github.com/enverbisevac/libs/timeutil"
 	"github.com/enverbisevac/libs/validator"
 )
 
 func TestParamByNameOrDefault(t *testing.T) {
-	r, err := http.NewRequest("GET", "/some-url?q=test&id=1&all=true&sort=1&sort=2&parent=", nil)
+	timeutil.DefaultLayout = time.DateOnly
+	r, err := http.NewRequest("GET", "/some-url?q=test&id=1&all=true&sort=1&sort=2&parent=&time=2023-08-01", nil)
 	if err != nil {
 		t.Errorf("ParamByName() error = %v", err)
 		return
@@ -72,6 +75,18 @@ func TestParamByNameOrDefault(t *testing.T) {
 		}
 		if !reflect.DeepEqual(got, []int64{1, 2}) {
 			t.Errorf("ParamByName() = %v, want %v", got, []int64{1, 2})
+		}
+	})
+
+	t.Run("test time.Time type", func(t *testing.T) {
+		got, err := QueryParamOrDefault(r, "time", time.Now())
+		if err != nil {
+			t.Errorf("ParamByName() error = %v", err)
+			return
+		}
+		date := time.Date(2023, 8, 1, 0, 0, 0, 0, time.Local)
+		if got.Year() != date.Year() && got.Month() != date.Month() && got.Day() != date.Day() {
+			t.Errorf("ParamByName() = %v, want %v", got, date)
 		}
 	})
 }

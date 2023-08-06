@@ -1,8 +1,13 @@
 package slice
 
-import "strconv"
+import (
+	"strconv"
+	"time"
 
-func StrTo[T ~int64 | ~float64 | ~bool](slice []string) ([]T, error) {
+	"github.com/enverbisevac/libs/timeutil"
+)
+
+func StrTo[T ~int64 | ~float64 | ~bool | time.Time](slice []string) ([]T, error) {
 	var (
 		val T
 		f   func(str string) (any, error)
@@ -20,6 +25,10 @@ func StrTo[T ~int64 | ~float64 | ~bool](slice []string) ([]T, error) {
 	case bool:
 		f = func(str string) (any, error) {
 			return strconv.ParseBool(str)
+		}
+	case time.Time:
+		f = func(str string) (any, error) {
+			return timeutil.DefaultParserFunc(str)
 		}
 	}
 
