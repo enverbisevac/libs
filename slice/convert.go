@@ -4,9 +4,8 @@ import "strconv"
 
 func StrTo[T ~int64 | ~float64 | ~bool](slice []string) ([]T, error) {
 	var (
-		val  T
-		zero []T
-		f    func(str string) (any, error)
+		val T
+		f   func(str string) (any, error)
 	)
 
 	switch any(val).(type) {
@@ -28,7 +27,7 @@ func StrTo[T ~int64 | ~float64 | ~bool](slice []string) ([]T, error) {
 	for i, pv := range slice {
 		val, err := f(pv)
 		if err != nil {
-			return zero, err
+			return []T{}, err
 		}
 		newSlice[i] = val.(T)
 	}
