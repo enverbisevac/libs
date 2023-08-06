@@ -13,13 +13,41 @@ import (
 
 func TestParamByNameOrDefault(t *testing.T) {
 	timeutil.DefaultLayout = time.DateOnly
+	r, err := http.NewRequest("GET", "/some-url?id=1&parent=", nil)
+	if err != nil {
+		t.Errorf("ParamByName() error = %v", err)
+		return
+	}
+
+	t.Run("test string type with empty value", func(t *testing.T) {
+		got := QueryParamOrDefault(r, "parent", "default")
+		if got != "default" {
+			t.Errorf("ParamByName() = %v, want %v", got, "default")
+		}
+	})
+
+	t.Run("test int64 type with validation", func(t *testing.T) {
+		got := QueryParamOrDefault(r, "id", int64(5), func(v int64) error {
+			if !validator.Between(v, 3, 7) {
+				return fmt.Errorf("Value %v must be between 3 and 7", v)
+			}
+			return nil
+		})
+		if got != int64(5) {
+			t.Errorf("ParamByName() = %v, want %v", got, 5)
+		}
+	})
+}
+
+func TestParamByName(t *testing.T) {
+	timeutil.DefaultLayout = time.DateOnly
 	r, err := http.NewRequest("GET", "/some-url?q=test&id=1&all=true&sort=1&sort=2&parent=&time=2023-08-01", nil)
 	if err != nil {
 		t.Errorf("ParamByName() error = %v", err)
 		return
 	}
 	t.Run("test string type", func(t *testing.T) {
-		got, err := QueryParamOrDefault(r, "q", "")
+		got, err := QueryParam[string](r, "q")
 		if err != nil {
 			t.Errorf("ParamByName() error = %v", err)
 			return
@@ -29,19 +57,8 @@ func TestParamByNameOrDefault(t *testing.T) {
 		}
 	})
 
-	t.Run("test string type with empty value", func(t *testing.T) {
-		got, err := QueryParamOrDefault(r, "parent", "default")
-		if err != nil {
-			t.Errorf("ParamByName() error = %v", err)
-			return
-		}
-		if got != "default" {
-			t.Errorf("ParamByName() = %v, want %v", got, "default")
-		}
-	})
-
 	t.Run("test int64 type", func(t *testing.T) {
-		got, err := QueryParamOrDefault(r, "id", int64(0))
+		got, err := QueryParam[int64](r, "id")
 		if err != nil {
 			t.Errorf("ParamByName() error = %v", err)
 			return
@@ -51,24 +68,8 @@ func TestParamByNameOrDefault(t *testing.T) {
 		}
 	})
 
-	t.Run("test int64 type with validation", func(t *testing.T) {
-		got, err := QueryParamOrDefault(r, "id", int64(5), func(v int64) error {
-			if !validator.Between(v, 3, 7) {
-				return fmt.Errorf("Value %v must be between 3 and 7", v)
-			}
-			return nil
-		})
-		if err != nil {
-			t.Errorf("ParamByName() error = %v", err)
-			return
-		}
-		if got != int64(5) {
-			t.Errorf("ParamByName() = %v, want %v", got, 5)
-		}
-	})
-
 	t.Run("test slice of int64", func(t *testing.T) {
-		got, err := QueryParamOrDefault(r, "sort", []int64{})
+		got, err := QueryParam[[]int64](r, "sort")
 		if err != nil {
 			t.Errorf("ParamByName() error = %v", err)
 			return
@@ -79,7 +80,7 @@ func TestParamByNameOrDefault(t *testing.T) {
 	})
 
 	t.Run("test time.Time type", func(t *testing.T) {
-		got, err := QueryParamOrDefault(r, "time", time.Now())
+		got, err := QueryParam[time.Time](r, "time")
 		if err != nil {
 			t.Errorf("ParamByName() error = %v", err)
 			return

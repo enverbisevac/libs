@@ -1,6 +1,7 @@
 package httputil
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -20,8 +21,17 @@ type FromConstraint interface {
 	*http.Request | *url.URL | url.Values
 }
 
-func QueryParamOrDefault[T ParamTypes, K FromConstraint](from K, param string, defValue T, validators ...validator.Validator[T]) (T, error) {
+func QueryParamOrDefault[T ParamTypes, K FromConstraint](from K, param string, defValue T, validators ...validator.Validator[T]) T {
+	value, err := QueryParam(from, param, validators...)
+	if err != nil {
+		return defValue
+	}
+	return value
+}
+
+func QueryParam[T ParamTypes, K FromConstraint](from K, param string, validators ...validator.Validator[T]) (T, error) {
 	var (
+		zero   T
 		result any
 		err    error
 		values url.Values
@@ -38,15 +48,15 @@ func QueryParamOrDefault[T ParamTypes, K FromConstraint](from K, param string, d
 
 	paramValues, ok := values[param]
 	if !ok || len(paramValues) == 0 {
-		return defValue, nil
+		return zero, fmt.Errorf("%s param not found in query", param)
 	}
 
 	paramValue := paramValues[0]
 	if paramValue == "" {
-		return defValue, nil
+		return zero, fmt.Errorf("%s param value is empty", param)
 	}
 
-	switch any(defValue).(type) {
+	switch any(zero).(type) {
 	case string:
 		result = paramValue
 	case int:
@@ -73,21 +83,17 @@ func QueryParamOrDefault[T ParamTypes, K FromConstraint](from K, param string, d
 	case []time.Time:
 		result, err = slice.StrTo[time.Time](paramValues)
 	default:
-		result = defValue
+		err = fmt.Errorf("%s param type not supported %T", param, zero)
 	}
 
 	if err != nil {
-		return defValue, err
+		return zero, fmt.Errorf("%s param type conversion error: %w", param, err)
 	}
 
 	// check if value is validated or return default value
 	if err = validator.Validate(result.(T), validators...); err != nil {
-		return defValue, nil
+		return zero, fmt.Errorf("%s param validation failed, err: %w", param, err)
 	}
 
 	return result.(T), nil
-}
-
-func QueryParam[T ParamTypes, K FromConstraint](from K, param string, validators ...validator.Validator[T]) (zero T, _ error) {
-	return QueryParamOrDefault(from, param, zero, validators...)
 }

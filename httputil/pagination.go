@@ -27,12 +27,12 @@ type Pages[T any] struct {
 	Items      []T `json:"items"`
 }
 
-// New creates a new Pages instance.
+// NewPages creates a new Pages instance.
 // The page parameter is 1-based and refers to the current page index/number.
 // The perPage parameter refers to the number of items on each page.
 // And the total parameter specifies the total number of data items.
 // If total is less than 0, it means total is unknown.
-func New[T any](page, perPage, total int) *Pages[T] {
+func NewPages[T any](page, perPage, total int) *Pages[T] {
 	if perPage <= 0 {
 		perPage = DefaultPageSize
 	}
@@ -58,18 +58,12 @@ func New[T any](page, perPage, total int) *Pages[T] {
 	}
 }
 
-// NewFromRequest creates a Pages object using the query parameters found in the given HTTP request.
+// PagesFromRequest creates a Pages object using the query parameters found in the given HTTP request.
 // count stands for the total number of items. Use -1 if this is unknown.
-func NewFromRequest[T any](req *http.Request, count int) *Pages[T] {
-	f := func(value int) error {
-		if value < 1 {
-			return fmt.Errorf("value cannot be lower then 1")
-		}
-		return nil
-	}
-	page, _ := QueryParamOrDefault(req, PageVar, 1, f)
-	perPage, _ := QueryParamOrDefault(req, PageSizeVar, DefaultPageSize, f)
-	return New[T](page, perPage, count)
+func PagesFromRequest[T any](req *http.Request, count int) *Pages[T] {
+	page := QueryParamOrDefault(req, PageVar, 1)
+	perPage := QueryParamOrDefault(req, PageSizeVar, DefaultPageSize)
+	return NewPages[T](page, perPage, count)
 }
 
 // Offset returns the OFFSET value that can be used in a SQL statement.

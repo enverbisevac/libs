@@ -33,7 +33,7 @@ func TestNew(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		p := New[struct{}](test.page, test.perPage, test.total)
+		p := NewPages[struct{}](test.page, test.perPage, test.total)
 		assert.Equal(t, test.expectedPage, p.Page, test.tag)
 		assert.Equal(t, test.expectedPerPage, p.PerPage, test.tag)
 		assert.Equal(t, test.expectedTotal, p.TotalCount, test.tag)
@@ -60,18 +60,18 @@ func TestPages_BuildLinkHeader(t *testing.T) {
 		{"t7", 4, 20, -1, "</tokens?page=1&per_page=20>; rel=\"first\", </tokens?page=3&per_page=20>; rel=\"prev\", </tokens?page=5&per_page=20>; rel=\"next\""},
 	}
 	for _, test := range tests {
-		p := New[struct{}](test.page, test.perPage, test.total)
+		p := NewPages[struct{}](test.page, test.perPage, test.total)
 		assert.Equal(t, test.header, p.BuildLinkHeader(baseURL, defaultPerPage), test.tag)
 	}
 
 	baseURL = "/tokens?from=10"
-	p := New[struct{}](1, 20, 50)
+	p := NewPages[struct{}](1, 20, 50)
 	assert.Equal(t, "</tokens?from=10&page=2&per_page=20>; rel=\"next\", </tokens?from=10&page=3&per_page=20>; rel=\"last\"", p.BuildLinkHeader(baseURL, defaultPerPage))
 }
 
 func TestNewFromRequest(t *testing.T) {
 	req, _ := http.NewRequest("GET", "http://example.com?page=2&per_page=20", bytes.NewBufferString(""))
-	p := NewFromRequest[struct{}](req, 100)
+	p := PagesFromRequest[struct{}](req, 100)
 	assert.Equal(t, 2, p.Page)
 	assert.Equal(t, 20, p.PerPage)
 	assert.Equal(t, 100, p.TotalCount)
