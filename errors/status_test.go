@@ -22,7 +22,7 @@ func TestConflictWithDetail(t *testing.T) {
 
 	mc := Detail[mergeConflict](err)
 
-	if len(mc.Files) == 0 {
+	if mc == nil || len(mc.Files) == 0 {
 		t.Errorf("expected length of files should be 1, got: %d", len(mc.Files))
 	}
 
