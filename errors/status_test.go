@@ -16,7 +16,15 @@ func TestConflictWithDetail(t *testing.T) {
 		Files: []string{"test.txt"},
 	})
 
+	if !IsConflict(err) {
+		t.Errorf("expected conflict error, got: %s", err.Status)
+	}
+
 	mc := Detail[mergeConflict](err)
+
+	if len(mc.Files) == 0 {
+		t.Errorf("expected length of files should be 1, got: %d", len(mc.Files))
+	}
 
 	if mc.Files[0] != "test.txt" {
 		t.Errorf("expected test.txt, got: %s", mc.Files[0])

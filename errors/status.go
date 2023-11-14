@@ -14,7 +14,6 @@ const (
 	StatusNotFound           Status = "not_found"
 	StatusNotImplemented     Status = "not_implemented"
 	StatusUnauthorized       Status = "unauthorized"
-	StatusFailed             Status = "failed"
 	StatusPreconditionFailed Status = "precondition_failed"
 	StatusAborted            Status = "aborted"
 )
@@ -33,10 +32,12 @@ type Error struct {
 	details []any
 }
 
+// Unwrap error and return source error.
 func (e *Error) Unwrap() error {
 	return e.Err
 }
 
+// Source sets the origin err and return error.
 func (e *Error) Source(err error) *Error {
 	e.Err = err
 	return e
@@ -52,6 +53,11 @@ func (e *Error) Details(args ...any) *Error {
 		e.details = append(e.details, args...)
 	}
 	return e
+}
+
+// Http returns http status based on error status.
+func (e *Error) Http() int {
+	return HttpMap[e.Status]
 }
 
 // AsStatus unwraps an error and returns its code.
@@ -91,6 +97,7 @@ func Details(err error) []any {
 	return nil
 }
 
+// Detail returns generic type stored in details.
 func Detail[T any](err error) (detail *T) {
 	if err == nil {
 		return nil
@@ -118,8 +125,14 @@ func AsError(err error) (e *Error) {
 	return
 }
 
+// IsStatus checks if err is Error type.
 func IsStatus(err error) bool {
 	return errors.Is(err, &Error{})
+}
+
+// Http returns http status.
+func HttpStatus(err error) int {
+	return AsError(err).Http()
 }
 
 // Format is a helper function to return an Error with a given status and formatted message.
@@ -158,12 +171,37 @@ func PreconditionFailed(format string, args ...interface{}) *Error {
 	return Format(StatusPreconditionFailed, format, args...)
 }
 
-// Failed is a helper function to return failed error status.
-func Failed(format string, args ...interface{}) *Error {
-	return Format(StatusFailed, format, args...)
-}
-
 // Aborted is a helper function to return aborted error status.
 func Aborted(format string, args ...interface{}) *Error {
 	return Format(StatusAborted, format, args...)
+}
+
+// IsNotFound checks if err is not found error.
+func IsNotFound(err error) bool {
+	return AsStatus(err) == StatusNotFound
+}
+
+// IsConflict checks if err is conflict error.
+func IsConflict(err error) bool {
+	return AsStatus(err) == StatusConflict
+}
+
+// IsInvalidArgument checks if err is invalid argument error.
+func IsInvalidArgument(err error) bool {
+	return AsStatus(err) == StatusInvalidArgument
+}
+
+// IsInternal checks if err is internal error.
+func IsInternal(err error) bool {
+	return AsStatus(err) == StatusInternal
+}
+
+// IsPreconditionFailed checks if err is precondition failed error.
+func IsPreconditionFailed(err error) bool {
+	return AsStatus(err) == StatusPreconditionFailed
+}
+
+// IsAborted checks if err is aborted error.
+func IsAborted(err error) bool {
+	return AsStatus(err) == StatusAborted
 }
