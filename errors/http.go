@@ -9,7 +9,8 @@ var (
 		StatusInvalidArgument:    http.StatusBadRequest,
 		StatusNotFound:           http.StatusNotFound,
 		StatusNotImplemented:     http.StatusNotImplemented,
-		StatusUnauthorized:       http.StatusUnauthorized,
+		StatusUnauthenticated:    http.StatusUnauthorized,
+		StatusUnauthorized:       http.StatusForbidden,
 		StatusPreconditionFailed: http.StatusPreconditionFailed,
 		StatusAborted:            http.StatusInternalServerError,
 	}

@@ -13,6 +13,7 @@ const (
 	StatusInvalidArgument    Status = "invalid"
 	StatusNotFound           Status = "not_found"
 	StatusNotImplemented     Status = "not_implemented"
+	StatusUnauthenticated    Status = "unauthenticated"
 	StatusUnauthorized       Status = "unauthorized"
 	StatusPreconditionFailed Status = "precondition_failed"
 	StatusAborted            Status = "aborted"
