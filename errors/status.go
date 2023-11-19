@@ -177,6 +177,16 @@ func Aborted(format string, args ...interface{}) *Error {
 	return Format(StatusAborted, format, args...)
 }
 
+// Unauthenticated is a helper function to return unauthenticated error status.
+func Unauthenticated(format string, args ...interface{}) *Error {
+	return Format(StatusUnauthenticated, format, args...)
+}
+
+// Unauthorized is a helper function to return unauthorized error status.
+func Unauthorized(format string, args ...interface{}) *Error {
+	return Format(StatusUnauthorized, format, args...)
+}
+
 // IsNotFound checks if err is not found error.
 func IsNotFound(err error) bool {
 	return AsStatus(err) == StatusNotFound
@@ -205,4 +215,14 @@ func IsPreconditionFailed(err error) bool {
 // IsAborted checks if err is aborted error.
 func IsAborted(err error) bool {
 	return AsStatus(err) == StatusAborted
+}
+
+// IsUnauthenticated checks if err is unauthenticated error.
+func IsUnauthenticated(err error) bool {
+	return AsStatus(err) == StatusUnauthenticated
+}
+
+// IsUnauthorized checks if err is unauthorized error.
+func IsUnauthorized(err error) bool {
+	return AsStatus(err) == StatusUnauthorized
 }
