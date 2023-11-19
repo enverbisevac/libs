@@ -126,6 +126,13 @@ func AsError(err error) (e *Error) {
 	return
 }
 
+func Source(err error) error {
+	if e := AsError(err); e != nil {
+		return e.Err
+	}
+	return err
+}
+
 // IsStatus checks if err is Error type.
 func IsStatus(err error) bool {
 	return errors.Is(err, &Error{})
@@ -149,6 +156,11 @@ func Format(code Status, format string, args ...interface{}) *Error {
 // NotFound is a helper function to return an not found Error.
 func NotFound(format string, args ...interface{}) *Error {
 	return Format(StatusNotFound, format, args...)
+}
+
+// NotImplemented is a helper function to return an not found Error.
+func NotImplemented(format string, args ...interface{}) *Error {
+	return Format(StatusNotImplemented, format, args...)
 }
 
 // InvalidArgument is a helper function to return an invalid argument Error.
@@ -190,6 +202,11 @@ func Unauthorized(format string, args ...interface{}) *Error {
 // IsNotFound checks if err is not found error.
 func IsNotFound(err error) bool {
 	return AsStatus(err) == StatusNotFound
+}
+
+// IsNotImplemented checks if err is not implemented error.
+func IsNotImplemented(err error) bool {
+	return AsStatus(err) == StatusNotImplemented
 }
 
 // IsConflict checks if err is conflict error.
