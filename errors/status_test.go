@@ -12,7 +12,7 @@ func TestConflictWithDetail(t *testing.T) {
 	base := "main"
 	head := "dev"
 
-	err := Conflict("merge failed for base '%s' and head '%s'", base, head).Details(mergeConflict{
+	err := Conflict("merge failed for base '%s' and head '%s'", base, head).Detail(mergeConflict{
 		Files: []string{"test.txt"},
 	})
 

@@ -21,16 +21,16 @@ const (
 
 type Error struct {
 	// Source error
-	Err error
+	Err error `json:"source_error,omitempty"`
 
 	// Machine-readable status code.
-	Status Status
+	Status Status `json:"status"`
 
 	// Human-readable error message.
-	Message string
+	Message string `json:"message"`
 
-	// Details
-	details []any
+	// Detail
+	Payload any `json:"detail,omitempty"`
 }
 
 // Unwrap error and return source error.
@@ -49,10 +49,8 @@ func (e *Error) Error() string {
 	return e.Message
 }
 
-func (e *Error) Details(args ...any) *Error {
-	if e.details == nil {
-		e.details = append(e.details, args...)
-	}
+func (e *Error) Detail(arg any) *Error {
+	e.Payload = arg
 	return e
 }
 
@@ -86,18 +84,6 @@ func Message(err error) string {
 	return err.Error()
 }
 
-// Details unwraps an error and returns its details.
-func Details(err error) []any {
-	if err == nil {
-		return nil
-	}
-	e := AsError(err)
-	if e != nil {
-		return e.details
-	}
-	return nil
-}
-
 // Detail returns generic type stored in details.
 func Detail[T any](err error) (detail *T) {
 	if err == nil {
@@ -105,11 +91,9 @@ func Detail[T any](err error) (detail *T) {
 	}
 	e := AsError(err)
 	if e != nil {
-		for _, detail := range e.details {
-			v, ok := detail.(T)
-			if ok {
-				return &v
-			}
+		v, ok := e.Payload.(T)
+		if ok {
+			return &v
 		}
 	}
 	return nil
