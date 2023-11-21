@@ -17,7 +17,7 @@ func TestConflictWithDetail(t *testing.T) {
 	})
 
 	if !IsConflict(err) {
-		t.Errorf("expected conflict error, got: %s", err.Status)
+		t.Errorf("expected conflict error, got: %s", err.Code)
 	}
 
 	mc := Detail[mergeConflict](err)
