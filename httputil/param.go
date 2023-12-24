@@ -21,7 +21,7 @@ type FromConstraint interface {
 	*http.Request | *url.URL | url.Values
 }
 
-func QueryParamOrDefault[T ParamTypes, K FromConstraint](from K, param string, defValue T, validators ...validator.Validator[T]) T {
+func QueryParamOrDefault[T ParamTypes, K FromConstraint](from K, param string, defValue T, validators ...validator.ValidatorFunc[T]) T {
 	value, err := QueryParam(from, param, validators...)
 	if err != nil {
 		return defValue
@@ -29,7 +29,7 @@ func QueryParamOrDefault[T ParamTypes, K FromConstraint](from K, param string, d
 	return value
 }
 
-func QueryParam[T ParamTypes, K FromConstraint](from K, param string, validators ...validator.Validator[T]) (T, error) {
+func QueryParam[T ParamTypes, K FromConstraint](from K, param string, validators ...validator.ValidatorFunc[T]) (T, error) {
 	var (
 		zero   T
 		result any

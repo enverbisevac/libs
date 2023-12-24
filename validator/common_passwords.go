@@ -19,6 +19,17 @@
 
 package validator
 
+import "errors"
+
+var (
+	ErrPasswordIsRequired = errors.New("password is required")
+	ErrPasswordIsCommon   = errors.New("password is common")
+)
+
+func IsCommonPassword(value string) bool {
+	return In(value, CommonPasswords...)
+}
+
 // CommonPasswords list is from
 // https://github.com/danielmiessler/SecLists/blob/master/Passwords/Common-Credentials/10k-most-common.txt
 //
