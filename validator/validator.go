@@ -1,8 +1,61 @@
 package validator
 
-type Validator[T any] func(T) error
+import (
+	"sync"
+	"time"
 
-func Validate[T any](data T, validators ...Validator[T]) error {
+	"github.com/enverbisevac/libs/errors"
+)
+
+type ValidatorFunc[T any] func(T) error
+
+type Validator struct {
+	mux    sync.Mutex
+	Errors []error
+}
+
+func (v *Validator) HasErrors() bool {
+	v.mux.Lock()
+	defer v.mux.Unlock()
+	return len(v.Errors) != 0
+}
+
+func (v *Validator) AddError(err ...error) {
+	if err == nil {
+		return
+	}
+
+	if v.Errors == nil {
+		v.Errors = []error{}
+	}
+
+	v.mux.Lock()
+	defer v.mux.Unlock()
+
+	v.Errors = append(v.Errors, err...)
+}
+
+func (v *Validator) Check(ok bool, err error) {
+	if !ok {
+		v.AddError(err)
+	}
+}
+
+func (v *Validator) Err(msg string) error {
+	if v.HasErrors() {
+		return &errors.ValidationError{
+			Base: errors.Base{
+				Msg:       msg,
+				Status:    (*errors.ValidationError).HttpStatus(nil),
+				Timestamp: time.Now(),
+			},
+			Errors: v.Errors,
+		}
+	}
+	return nil
+}
+
+func Validate[T any](data T, validators ...ValidatorFunc[T]) error {
 	for _, validator := range validators {
 		err := validator(data)
 		if err != nil {
