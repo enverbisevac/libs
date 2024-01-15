@@ -58,12 +58,30 @@ func NewPages[T any](page, perPage, total int) *Pages[T] {
 	}
 }
 
+func NewPagesWithItems[T any](page, perPage, total int, items []T) *Pages[T] {
+	p := NewPages[T](page, perPage, total)
+	p.Items = items
+	return p
+}
+
 // PagesFromRequest creates a Pages object using the query parameters found in the given HTTP request.
 // count stands for the total number of items. Use -1 if this is unknown.
 func PagesFromRequest[T any](req *http.Request, count int) *Pages[T] {
 	page := QueryParamOrDefault(req, PageVar, 1)
 	perPage := QueryParamOrDefault(req, PageSizeVar, DefaultPageSize)
 	return NewPages[T](page, perPage, count)
+}
+
+// PagesFromRequest creates a Pages object using the query parameters found in the given HTTP request.
+// count stands for the total number of items. Use -1 if this is unknown.
+func PagesFromReqAndData[T any](req *http.Request, fn func(limit, offset int) ([]T, int64, error)) (*Pages[T], error) {
+	page := QueryParamOrDefault(req, PageVar, 1)
+	perPage := QueryParamOrDefault(req, PageSizeVar, DefaultPageSize)
+	data, total, err := fn(perPage, (page-1)*perPage)
+	if err != nil {
+		return nil, err
+	}
+	return NewPagesWithItems[T](page, perPage, int(total), data), nil
 }
 
 // Offset returns the OFFSET value that can be used in a SQL statement.
