@@ -1,33 +1,44 @@
-package cache
+package inmem
 
 import (
+	"errors"
 	"sync"
 	"time"
+
+	"github.com/enverbisevac/libs/cache"
+)
+
+var (
+	ErrNotFound = errors.New("key not found")
+)
+
+var (
+	_ cache.Cache = (*Cache)(nil)
 )
 
 // item represents a cache item with a value and an expiration time.
-type item[V any] struct {
-	value  V
+type item struct {
+	value  any
 	expiry time.Time
 }
 
 // isExpired checks if the cache item has expired.
-func (i item[V]) isExpired() bool {
+func (i item) isExpired() bool {
 	return time.Now().After(i.expiry)
 }
 
-// TTLCache is a generic cache implementation with support for time-to-live
+// Cache is a generic cache implementation with support for time-to-live
 // (TTL) expiration.
-type TTLCache[K comparable, V any] struct {
-	items map[K]item[V] // The map storing cache items.
-	mu    sync.Mutex    // Mutex for controlling concurrent access to the cache.
+type Cache struct {
+	items map[string]item // The map storing cache items.
+	mu    sync.Mutex      // Mutex for controlling concurrent access to the cache.
 }
 
 // NewTTL creates a new TTLCache instance and starts a goroutine to periodically
 // remove expired items every 5 seconds.
-func NewTTL[K comparable, V any]() *TTLCache[K, V] {
-	c := &TTLCache[K, V]{
-		items: make(map[K]item[V]),
+func New() *Cache {
+	c := &Cache{
+		items: make(map[string]item),
 	}
 
 	go func() {
@@ -50,60 +61,64 @@ func NewTTL[K comparable, V any]() *TTLCache[K, V] {
 
 // Set adds a new item to the cache with the specified key, value, and
 // time-to-live (TTL).
-func (c *TTLCache[K, V]) Set(key K, value V, ttl time.Duration) {
+func (c *Cache) Set(key string, value any, ttl time.Duration) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.items[key] = item[V]{
+	c.items[key] = item{
 		value:  value,
 		expiry: time.Now().Add(ttl),
 	}
+	return nil
 }
 
 // Get retrieves the value associated with the given key from the cache.
-func (c *TTLCache[K, V]) Get(key K) (V, bool) {
+func (c *Cache) Get(key string) (any, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	item, found := c.items[key]
 	if !found {
 		// If the key is not found, return the zero value for V and false.
-		return item.value, false
+		return nil, ErrNotFound
 	}
 
 	if item.isExpired() {
 		// If the item has expired, remove it from the cache and return the zero
 		// value for V and false.
 		delete(c.items, key)
-		return item.value, false
+		return nil, ErrNotFound
 	}
 
 	// If the item is still valid, return its value and true.
-	return item.value, true
+	return item.value, nil
 }
 
 // Remove removes the item with the specified key from the cache.
-func (c *TTLCache[K, V]) Remove(key K) {
+func (c *Cache) Remove(keys ...string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	// Delete the item with the given key from the cache.
-	delete(c.items, key)
+	for _, key := range keys {
+		delete(c.items, key)
+	}
+	return nil
 }
 
 // Pop removes and returns the item with the specified key from the cache.
-func (c *TTLCache[K, V]) Pop(key K) (V, bool) {
+func (c *Cache) Pop(key string) (any, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	item, found := c.items[key]
 	if !found {
 		// If the key is not found, return the zero value for V and false.
-		return item.value, false
+		return item.value, ErrNotFound
 	}
 
 	// If the key is found, delete the item from the cache and return its value
 	// and true.
 	delete(c.items, key)
-	return item.value, true
+	return item.value, nil
 }

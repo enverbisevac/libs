@@ -7,7 +7,7 @@ import (
 	"github.com/enverbisevac/libs/ptr"
 )
 
-type status interface {
+type httpStatus interface {
 	HttpStatus() int
 }
 
@@ -16,7 +16,7 @@ func HttpStatus(err error) int {
 		return http.StatusOK
 	}
 again:
-	v, ok := err.(status)
+	v, ok := err.(httpStatus)
 	if ok {
 		return v.HttpStatus()
 	}
@@ -71,6 +71,7 @@ func JSONResponse(w http.ResponseWriter, err error, options ...JSONResponseOptio
 	w.Header().Set("Content-Type", "application/problem+json")
 	status := HttpStatus(err)
 	w.WriteHeader(status)
+
 	if status == 0 {
 		obj = ptr.From(NewBase(http.StatusInternalServerError, err.Error()))
 	} else {
@@ -84,5 +85,15 @@ func JSONResponse(w http.ResponseWriter, err error, options ...JSONResponseOptio
 	if status == 0 {
 		return json.NewEncoder(w).Encode(obj)
 	}
-	return json.NewEncoder(w).Encode(err)
+
+again:
+	v, ok := err.(httpStatus)
+	if ok {
+		return json.NewEncoder(w).Encode(v)
+	}
+	err = Unwrap(err)
+	if err == nil {
+		return json.NewEncoder(w).Encode(obj)
+	}
+	goto again
 }
