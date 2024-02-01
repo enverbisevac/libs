@@ -174,8 +174,8 @@ func (e *NotFoundError) Is(err error) bool {
 
 type InternalError struct {
 	Base
-	Err        error `json:"-"`
-	Stacktrace []byte
+	Err        error           `json:"-"`
+	Stacktrace json.RawMessage `json:"-"`
 }
 
 // Internal is a helper function to return an internal Error.

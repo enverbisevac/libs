@@ -7,4 +7,5 @@ type Cache interface {
 	Get(key string) (any, error)
 	Remove(key ...string) error
 	Pop(key string) (any, error)
+	Keys(prefix string) []string
 }

@@ -67,32 +67,23 @@ func WithTraceID(traceID string) JSONResponseFunc {
 }
 
 func JSONResponse(w http.ResponseWriter, err error, options ...JSONResponseOption) error {
-	var obj *Base
 	w.Header().Set("Content-Type", "application/problem+json")
-	status := HttpStatus(err)
-	w.WriteHeader(status)
-
-	if status == 0 {
-		obj = ptr.From(NewBase(http.StatusInternalServerError, err.Error()))
-	} else {
-		obj = getBase(err)
-	}
-
-	for _, opt := range options {
-		opt.Apply(obj)
-	}
-
-	if status == 0 {
-		return json.NewEncoder(w).Encode(obj)
-	}
-
 again:
 	v, ok := err.(httpStatus)
 	if ok {
+		w.WriteHeader(v.HttpStatus())
+		obj := getBase(err)
+		for _, opt := range options {
+			opt.Apply(obj)
+		}
 		return json.NewEncoder(w).Encode(v)
 	}
 	err = Unwrap(err)
 	if err == nil {
+		obj := ptr.From(NewBase(http.StatusInternalServerError, err.Error()))
+		for _, opt := range options {
+			opt.Apply(obj)
+		}
 		return json.NewEncoder(w).Encode(obj)
 	}
 	goto again

@@ -57,3 +57,14 @@ func (c *Cache) Pop(key string) (any, error) {
 
 	return value, nil
 }
+
+func (c *Cache) Keys(prefix string) []string {
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultOperationTimeout)
+	defer cancel()
+
+	output, err := c.client.Keys(ctx, prefix).Result()
+	if err != nil {
+		return []string{}
+	}
+	return output
+}

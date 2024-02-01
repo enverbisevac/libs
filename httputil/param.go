@@ -13,7 +13,7 @@ import (
 )
 
 type ParamTypes interface {
-	~string | ~int | ~int64 | ~bool | ~float64 | time.Time |
+	~string | ~int | ~int64 | ~bool | ~*bool | ~float64 | time.Time |
 		~[]string | ~[]int | ~[]int64 | ~[]bool | ~[]float64 | ~[]time.Time
 }
 
@@ -66,6 +66,12 @@ func QueryParam[T ParamTypes, K FromConstraint](from K, param string, validators
 		result, err = strconv.ParseInt(paramValue, 10, 64)
 	case bool:
 		result, err = strconv.ParseBool(paramValue)
+	case *bool:
+		result, err = strconv.ParseBool(paramValue)
+		val, ok := result.(bool)
+		if ok {
+			result = &val
+		}
 	case float64:
 		result, err = strconv.ParseFloat(paramValue, 64)
 	case time.Time:

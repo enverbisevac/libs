@@ -2,6 +2,7 @@ package inmem
 
 import (
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -121,4 +122,14 @@ func (c *Cache) Pop(key string) (any, error) {
 	// and true.
 	delete(c.items, key)
 	return item.value, nil
+}
+
+func (c *Cache) Keys(prefix string) []string {
+	output := make([]string, 0, len(c.items))
+	for key := range c.items {
+		if strings.HasPrefix(key, prefix) {
+			output = append(output, key)
+		}
+	}
+	return output
 }
