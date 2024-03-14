@@ -25,6 +25,13 @@ func (v *Validator) AddError(err ...error) {
 		return
 	}
 
+	nerrs := make([]error, 0, len(err))
+	for _, verr := range err {
+		if verr != nil {
+			nerrs = append(nerrs, verr)
+		}
+	}
+
 	if v.Errors == nil {
 		v.Errors = []error{}
 	}
@@ -32,7 +39,7 @@ func (v *Validator) AddError(err ...error) {
 	v.mux.Lock()
 	defer v.mux.Unlock()
 
-	v.Errors = append(v.Errors, err...)
+	v.Errors = append(v.Errors, nerrs...)
 }
 
 func (v *Validator) Check(ok bool, err error) {
@@ -63,4 +70,13 @@ func Validate[T any](data T, validators ...ValidatorFunc[T]) error {
 		}
 	}
 	return nil
+}
+
+func FromError(err error) (v *Validator) {
+	v = new(Validator)
+	verr, ok := errors.AsValidation(err)
+	if ok {
+		v.Errors = verr.Errors
+	}
+	return
 }

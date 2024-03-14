@@ -11,11 +11,22 @@ type Cache interface {
 }
 
 type config struct {
+	TTL           time.Duration
 	AsyncSetter   bool
 	OnSetterError func(err error)
 }
 
 type CacheConfigFunc func(*config)
+
+var (
+	DefaultTTL = 1 * time.Hour
+)
+
+func TTL(duration time.Duration) CacheConfigFunc {
+	return func(c *config) {
+		c.TTL = duration
+	}
+}
 
 func OnError(fn func(err error)) CacheConfigFunc {
 	return func(c *config) {
@@ -39,6 +50,10 @@ func Get[T any](cache Cache, key string, fetcher func() (T, error), options ...C
 		f(&c)
 	}
 
+	if c.TTL == 0 {
+		c.TTL = DefaultTTL
+	}
+
 	if value, err := cache.Get(key); err == nil && value != nil {
 		output, ok := value.(T)
 		if ok {
@@ -52,7 +67,7 @@ func Get[T any](cache Cache, key string, fetcher func() (T, error), options ...C
 	}
 
 	setter := func() {
-		err = cache.Set(key, output, 1*time.Hour)
+		err = cache.Set(key, output, c.TTL)
 		if err != nil {
 			c.OnSetterError(err)
 		}

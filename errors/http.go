@@ -78,9 +78,10 @@ again:
 		}
 		return json.NewEncoder(w).Encode(v)
 	}
+	orig := err
 	err = Unwrap(err)
 	if err == nil {
-		obj := ptr.From(NewBase(http.StatusInternalServerError, err.Error()))
+		obj := ptr.From(NewBase(http.StatusInternalServerError, orig.Error()))
 		for _, opt := range options {
 			opt.Apply(obj)
 		}
