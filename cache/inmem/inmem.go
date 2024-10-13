@@ -9,13 +9,9 @@ import (
 	"github.com/enverbisevac/libs/cache"
 )
 
-var (
-	ErrNotFound = errors.New("key not found")
-)
+var ErrNotFound = errors.New("key not found")
 
-var (
-	_ cache.Cache = (*Cache)(nil)
-)
+var _ cache.Cache = (*Cache)(nil)
 
 // item represents a cache item with a value and an expiration time.
 type item struct {
@@ -32,7 +28,7 @@ func (i item) isExpired() bool {
 // (TTL) expiration.
 type Cache struct {
 	items map[string]item // The map storing cache items.
-	mu    sync.Mutex      // Mutex for controlling concurrent access to the cache.
+	mu    sync.RWMutex    // Mutex for controlling concurrent access to the cache.
 }
 
 // NewTTL creates a new TTLCache instance and starts a goroutine to periodically
@@ -75,8 +71,8 @@ func (c *Cache) Set(key string, value any, ttl time.Duration) error {
 
 // Get retrieves the value associated with the given key from the cache.
 func (c *Cache) Get(key string) (any, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
 	item, found := c.items[key]
 	if !found {
@@ -125,6 +121,8 @@ func (c *Cache) Pop(key string) (any, error) {
 }
 
 func (c *Cache) Keys(prefix string) []string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	output := make([]string, 0, len(c.items))
 	for key := range c.items {
 		if strings.HasPrefix(key, prefix) {
