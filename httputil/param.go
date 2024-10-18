@@ -13,7 +13,7 @@ import (
 )
 
 type ParamTypes interface {
-	~string | ~int | ~int64 | ~bool | ~*bool | ~float64 | time.Time |
+	~string | ~int | ~*int | ~int64 | ~*int64 | ~bool | ~*bool | ~float64 | time.Time |
 		~[]string | ~[]int | ~[]int64 | ~[]bool | ~[]float64 | ~[]time.Time
 }
 
