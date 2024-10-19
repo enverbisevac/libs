@@ -53,7 +53,6 @@ func (v *Validator) Err(msg string) error {
 		return &errors.ValidationError{
 			Base: errors.Base{
 				Msg:       msg,
-				Status:    (*errors.ValidationError).HttpStatus(nil),
 				Timestamp: time.Now(),
 			},
 			Errors: v.Errors,

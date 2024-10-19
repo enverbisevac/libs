@@ -12,26 +12,27 @@ import (
 
 type Base struct {
 	// Msg contains user friendly error.
-	Msg       string    `json:"message"`
-	Status    int       `json:"status,omitempty"`
-	TraceID   string    `json:"trace_id,omitempty"`
-	Timestamp time.Time `json:"timestamp,omitempty"`
+	Msg        string    `json:"message"`
+	StatusCode string    `json:"status,omitempty"`
+	TraceID    string    `json:"trace_id,omitempty"`
+	Timestamp  time.Time `json:"timestamp,omitempty"`
 }
 
-func NewBase(status int, format string, args ...any) Base {
+func NewBase(format string, args ...any) Base {
 	return Base{
 		Msg:       fmt.Sprintf(format, args...),
-		Status:    status,
 		Timestamp: time.Now(),
 	}
 }
 
-func (b *Base) SetTraceID(id string) {
-	b.TraceID = id
+func NewBaseWithStatus(statusCode string, format string, args ...any) Base {
+	base := NewBase(format, args...)
+	base.StatusCode = statusCode
+	return base
 }
 
-func (b *Base) GetBase() *Base {
-	return b
+func (b *Base) SetTraceID(id string) {
+	b.TraceID = id
 }
 
 type tracer interface {
@@ -69,7 +70,7 @@ func Conflict(format string, args ...any) *ConflictError {
 
 	return &ConflictError{
 		Item: item,
-		Base: NewBase((*ConflictError).HttpStatus(nil), format, args...),
+		Base: NewBase(format, args...),
 	}
 }
 
@@ -99,13 +100,23 @@ func (e *ConflictError) Error() string {
 	return "resource already exist"
 }
 
-// HttpStatus returns http status for ConflictError.
-func (e *ConflictError) HttpStatus() int {
-	return http.StatusConflict
+// HttpResponse returns http response for ConflictError.
+func (e *ConflictError) HttpResponse() HttpResponse {
+	slice := make([]string, len(e.Errors))
+	for i, e := range e.Errors {
+		slice[i] = e.Error()
+	}
+	return HttpResponse{
+		Base:   e.Base,
+		Status: http.StatusConflict,
+		Errors: slice,
+	}
 }
 
 func (e *ConflictError) AddError(err error) *ConflictError {
-	e.Errors = append(e.Errors, err)
+	if err != nil {
+		e.Errors = append(e.Errors, err)
+	}
 	return e
 }
 
@@ -132,7 +143,7 @@ func NotFound(format string, args ...any) *NotFoundError {
 	format, item := parse(format, args...)
 	return &NotFoundError{
 		Item: item,
-		Base: NewBase((*NotFoundError).HttpStatus(nil), format, args...),
+		Base: NewBase(format, args...),
 	}
 }
 
@@ -162,9 +173,12 @@ func (e *NotFoundError) Error() string {
 	return "resource not found"
 }
 
-// Is returns http status for NotFoundError
-func (e *NotFoundError) HttpStatus() int {
-	return http.StatusNotFound
+// HttpResponse returns http response for NotFoundError.
+func (e *NotFoundError) HttpResponse() HttpResponse {
+	return HttpResponse{
+		Base:   e.Base,
+		Status: http.StatusNotFound,
+	}
 }
 
 func (e *NotFoundError) Is(err error) bool {
@@ -181,7 +195,7 @@ type InternalError struct {
 // Internal is a helper function to return an internal Error.
 func Internal(err error, format string, args ...any) *InternalError {
 	return &InternalError{
-		Base:       NewBase((*InternalError).HttpStatus(nil), format, args...),
+		Base:       NewBase(format, args...),
 		Err:        err,
 		Stacktrace: debug.Stack(),
 	}
@@ -210,8 +224,13 @@ func (e *InternalError) Error() string {
 	return "internal server error"
 }
 
-func (e *InternalError) HttpStatus() int {
-	return http.StatusInternalServerError
+// HttpResponse returns http response for InternalError.
+func (e *InternalError) HttpResponse() HttpResponse {
+	return HttpResponse{
+		Base:   e.Base,
+		Status: http.StatusInternalServerError,
+		Errors: []string{e.Err.Error()},
+	}
 }
 
 type PreconditionFailedError struct {
@@ -222,7 +241,7 @@ type PreconditionFailedError struct {
 // Internal is a helper function to return an internal Error.
 func PreconditionFailed(format string, args ...interface{}) *PreconditionFailedError {
 	return &PreconditionFailedError{
-		Base: NewBase((*PreconditionFailedError).HttpStatus(nil), format, args...),
+		Base: NewBase(format, args...),
 	}
 }
 
@@ -238,8 +257,13 @@ func (e *PreconditionFailedError) Error() string {
 	return "precondition failed error"
 }
 
-func (e *PreconditionFailedError) HttpStatus() int {
-	return http.StatusPreconditionFailed
+// HttpResponse returns http response for PreconditionFailedError.
+func (e *PreconditionFailedError) HttpResponse() HttpResponse {
+	return HttpResponse{
+		Base:   e.Base,
+		Status: http.StatusPreconditionFailed,
+		Errors: []string{e.Err.Error()},
+	}
 }
 
 func (e *PreconditionFailedError) SetErr(err error) *PreconditionFailedError {
@@ -276,7 +300,7 @@ type ValidationError struct {
 // Validation is a helper function to return an invalid argument Error.
 func Validation(format string, args ...any) *ValidationError {
 	return &ValidationError{
-		Base: NewBase((*ValidationError).HttpStatus(nil), format, args...),
+		Base: NewBase(format, args...),
 	}
 }
 
@@ -300,12 +324,23 @@ func (e *ValidationError) Error() string {
 	return "validation error"
 }
 
-func (e *ValidationError) HttpStatus() int {
-	return http.StatusBadRequest
+// HttpResponse returns http response for ValidationError.
+func (e *ValidationError) HttpResponse() HttpResponse {
+	slice := make([]string, len(e.Errors))
+	for i, e := range e.Errors {
+		slice[i] = e.Error()
+	}
+	return HttpResponse{
+		Base:   e.Base,
+		Status: http.StatusBadRequest,
+		Errors: slice,
+	}
 }
 
 func (e *ValidationError) AddError(err error) *ValidationError {
-	e.Errors = append(e.Errors, err)
+	if err != nil {
+		e.Errors = append(e.Errors, err)
+	}
 	return e
 }
 
@@ -321,7 +356,7 @@ type NotImplementedError struct {
 // InvalidArgument is a helper function to return an invalid argument Error.
 func NotImplemented(format string, args ...any) *NotImplementedError {
 	return &NotImplementedError{
-		Base: NewBase((*NotImplementedError).HttpStatus(nil), format, args...),
+		Base: NewBase(format, args...),
 	}
 }
 
@@ -337,8 +372,12 @@ func (e *NotImplementedError) Error() string {
 	return "operation not implemented"
 }
 
-func (e *NotImplementedError) HttpStatus() int {
-	return http.StatusNotImplemented
+// HttpResponse returns http response for NotImplementedError.
+func (e *NotImplementedError) HttpResponse() HttpResponse {
+	return HttpResponse{
+		Base:   e.Base,
+		Status: http.StatusNotImplemented,
+	}
 }
 
 type UnauthenticatedError struct {
@@ -347,7 +386,7 @@ type UnauthenticatedError struct {
 
 func Unauthenticated(format string, args ...any) *UnauthenticatedError {
 	return &UnauthenticatedError{
-		Base: NewBase((*UnauthenticatedError).HttpStatus(nil), format, args...),
+		Base: NewBase(format, args...),
 	}
 }
 
@@ -362,8 +401,12 @@ func (e *UnauthenticatedError) Error() string {
 	return "unauthenticated"
 }
 
-func (e *UnauthenticatedError) HttpStatus() int {
-	return http.StatusUnauthorized
+// HttpResponse returns http response for UnauthenticatedError.
+func (e *UnauthenticatedError) HttpResponse() HttpResponse {
+	return HttpResponse{
+		Base:   e.Base,
+		Status: http.StatusUnauthorized,
+	}
 }
 
 type UnauthorizedError struct {
@@ -372,7 +415,7 @@ type UnauthorizedError struct {
 
 func Unauthorized(format string, args ...any) *UnauthorizedError {
 	return &UnauthorizedError{
-		Base: NewBase((*UnauthorizedError).HttpStatus(nil), format, args...),
+		Base: NewBase(format, args...),
 	}
 }
 
@@ -387,6 +430,10 @@ func (e *UnauthorizedError) Error() string {
 	return "unauthorized"
 }
 
-func (e *UnauthorizedError) HttpStatus() int {
-	return http.StatusForbidden
+// HttpResponse returns http response for UnauthorizedError.
+func (e *UnauthorizedError) HttpResponse() HttpResponse {
+	return HttpResponse{
+		Base:   e.Base,
+		Status: http.StatusForbidden,
+	}
 }
