@@ -42,7 +42,7 @@ func New(options ...Option) *PubSub {
 
 // Subscribe consumer to process the event with payload.
 func (ps *PubSub) subscribe(
-	ctx context.Context,
+	_ context.Context,
 	topic string,
 	options ...pubsub.SubscribeOption,
 ) *inMemorySubscriber {

@@ -8,16 +8,18 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-var (
-	DefaultOperationTimeout = 10 * time.Second
-)
+var DefaultOperationTimeout = 10 * time.Second
 
-var (
-	_ cache.Cache = (*Cache)(nil)
-)
+var _ cache.Cache = (*Cache)(nil)
 
 type Cache struct {
 	client redis.UniversalClient
+}
+
+func New(client redis.UniversalClient) *Cache {
+	return &Cache{
+		client: client,
+	}
 }
 
 func (c *Cache) Set(key string, value any, duration time.Duration) error {

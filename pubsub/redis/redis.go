@@ -42,23 +42,22 @@ func New(client redis.UniversalClient, options ...Option) *PubSub {
 	}
 }
 
-// Subscribe consumer to process the event with payload.
-func (r *PubSub) Subscribe(
+// subscribe consumer to process the event with payload.
+func (ps *PubSub) subscribe(
 	ctx context.Context,
 	topic string,
-	handler func(payload []byte) error,
 	options ...pubsub.SubscribeOption,
-) pubsub.Consumer {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
+) *redisSubscriber {
+	ps.mutex.Lock()
+	defer ps.mutex.Unlock()
 
 	config := pubsub.SubscribeConfig{
 		Topics:         make([]string, 0, 8),
-		App:            r.config.App,
-		Namespace:      r.config.Namespace,
-		HealthInterval: r.config.HealthInterval,
-		SendTimeout:    r.config.SendTimeout,
-		ChannelSize:    r.config.ChannelSize,
+		App:            ps.config.App,
+		Namespace:      ps.config.Namespace,
+		HealthInterval: ps.config.HealthInterval,
+		SendTimeout:    ps.config.SendTimeout,
+		ChannelSize:    ps.config.ChannelSize,
 	}
 
 	for _, f := range options {
@@ -67,29 +66,67 @@ func (r *PubSub) Subscribe(
 
 	// create subscriber and map it to the registry
 	subscriber := &redisSubscriber{
-		config:  &config,
-		handler: handler,
+		config: &config,
 	}
 
 	config.Topics = append(config.Topics, topic)
 
 	topics := subscriber.formatTopics(config.Topics...)
-	subscriber.rdb = r.client.Subscribe(ctx, topics...)
+	subscriber.rdb = ps.client.Subscribe(ctx, topics...)
 
 	// start subscriber
 	go subscriber.start(ctx)
 
 	// register subscriber
-	r.registry = append(r.registry, subscriber)
+	ps.registry = append(ps.registry, subscriber)
 
 	return subscriber
 }
 
+// Subscribe consumer to process the event with payload.
+func (ps *PubSub) Subscribe(
+	ctx context.Context,
+	topic string,
+	handler func(msg *pubsub.Msg) error,
+	options ...pubsub.SubscribeOption,
+) pubsub.Consumer {
+	subscriber := ps.subscribe(ctx, topic, options...)
+	subscriber.handler = handler
+	go subscriber.start(ctx)
+	return subscriber
+}
+
+func (ps *PubSub) SubscribeChan(
+	ctx context.Context,
+	topic string,
+	options ...pubsub.SubscribeOption,
+) (pubsub.Consumer, <-chan *pubsub.Msg) {
+	output := make(chan *pubsub.Msg)
+
+	subscriber := ps.subscribe(ctx, topic, options...)
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case ch := <-subscriber.rdb.Channel():
+				output <- &pubsub.Msg{
+					Topic:   ch.Channel,
+					Payload: []byte(ch.Payload),
+				}
+			}
+		}
+	}()
+
+	return subscriber, output
+}
+
 // Publish event topic to message broker with payload.
-func (r *PubSub) Publish(ctx context.Context, topic string, payload []byte, opts ...pubsub.PublishOption) error {
+func (ps *PubSub) Publish(ctx context.Context, topic string, payload []byte, opts ...pubsub.PublishOption) error {
 	pubConfig := pubsub.PublishConfig{
-		App:       r.config.App,
-		Namespace: r.config.Namespace,
+		App:       ps.config.App,
+		Namespace: ps.config.Namespace,
 	}
 	for _, f := range opts {
 		f.Apply(&pubConfig)
@@ -97,7 +134,7 @@ func (r *PubSub) Publish(ctx context.Context, topic string, payload []byte, opts
 
 	topic = pubsub.FormatTopic(pubConfig.App, pubConfig.Namespace, topic)
 
-	err := r.client.Publish(ctx, topic, payload).Err()
+	err := ps.client.Publish(ctx, topic, payload).Err()
 	if err != nil {
 		return fmt.Errorf("failed to write to pubsub topic '%s'. Error: %w",
 			topic, err)
@@ -118,7 +155,7 @@ func (r *PubSub) Close(_ context.Context) error {
 type redisSubscriber struct {
 	config  *pubsub.SubscribeConfig
 	rdb     *redis.PubSub
-	handler func([]byte) error
+	handler func(msg *pubsub.Msg) error
 }
 
 func (s *redisSubscriber) start(ctx context.Context) {
@@ -138,7 +175,10 @@ func (s *redisSubscriber) start(ctx context.Context) {
 				log.Info("redis channel was closed")
 				return
 			}
-			if err := s.handler([]byte(msg.Payload)); err != nil {
+			if err := s.handler(&pubsub.Msg{
+				Topic:   msg.Channel,
+				Payload: []byte(msg.Payload),
+			}); err != nil {
 				log.Error(err, "received an error from handler function")
 			}
 		}
