@@ -1,6 +1,7 @@
 package errors
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -229,7 +230,7 @@ func (e *InternalError) HttpResponse() HttpResponse {
 	return HttpResponse{
 		Base:   e.Base,
 		Status: http.StatusInternalServerError,
-		Errors: []string{e.Err.Error()},
+		Errors: []string{cmp.Or(e.Err, New("Internal Server Error")).Error()},
 	}
 }
 

@@ -62,3 +62,30 @@ again:
 		Status: http.StatusInternalServerError,
 	})
 }
+
+type Encoder interface {
+	Encode(v any) error
+}
+
+func Response(encoder Encoder, w http.ResponseWriter, err error) {
+	if err == nil {
+		return
+	}
+again:
+	v, ok := err.(httpResponse)
+	if ok {
+		response := v.HttpResponse()
+		w.WriteHeader(response.Status)
+		encoder.Encode(response)
+		return
+	}
+	err = Unwrap(err)
+	if err != nil {
+		goto again
+	}
+
+	encoder.Encode(HttpResponse{
+		Base:   NewBase(err.Error()),
+		Status: http.StatusInternalServerError,
+	})
+}
