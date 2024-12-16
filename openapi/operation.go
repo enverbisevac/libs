@@ -56,6 +56,8 @@ type Operation struct {
 	Description string
 	Tags        []string
 
+	Path      any
+	Header    any
 	Request   any
 	Responses map[int]any
 
@@ -78,6 +80,14 @@ func (o *Operation) OperationContext(
 	op.SetSummary(o.Summary)
 	op.SetDescription(o.Description)
 	op.SetTags(o.Tags...)
+
+	if o.Path != nil {
+		op.AddReqStructure(o.Path)
+	}
+
+	if o.Header != nil {
+		op.AddReqStructure(o.Header)
+	}
 
 	if o.Request != nil {
 		op.AddReqStructure(o.Request)
@@ -156,10 +166,18 @@ type Decoder interface {
 	Decode(v any) error
 }
 
-type OpenAPIHandleFunc[T, K any] func(Context, T) (K, error)
+type Request[T any, K any, V any] struct {
+	Path   T
+	Header K
+	Body   V
+}
 
-func (f OpenAPIHandleFunc[T, K]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	var value T
+type OpenAPIHandleFunc[T, K, V, R any] func(Context, Request[T, K, V]) (R, error)
+
+func (f OpenAPIHandleFunc[T, K, V, R]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	var path T
+	var header K
+	var body V
 	contentType := r.Header.Get("Content-Type")
 	accept := r.Header.Get("Accept")
 
@@ -187,13 +205,19 @@ func (f OpenAPIHandleFunc[T, K]) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		encoder = json.NewEncoder(w)
 	}
 
-	err := decoder.Decode(&value)
-	if err != nil && !errors.Is(err, io.EOF) {
+	err := decoder.Decode(&path)
+	if err != nil {
 		errors.Response(encoder, w, err)
 		return
 	}
 
-	err = httputil.Decode(r, chi.URLParam, &value)
+	err = decoder.Decode(&header)
+	if err != nil {
+		errors.Response(encoder, w, err)
+		return
+	}
+
+	err = httputil.Decode(r, chi.URLParam, &body)
 	if err != nil && !errors.Is(err, io.EOF) {
 		errors.Response(encoder, w, err)
 		return
@@ -202,7 +226,11 @@ func (f OpenAPIHandleFunc[T, K]) ServeHTTP(w http.ResponseWriter, r *http.Reques
 	v, err := f(Context{
 		Request:  r,
 		Response: w,
-	}, value)
+	}, Request[T, K, V]{
+		Path:   path,
+		Header: header,
+		Body:   body,
+	})
 	if err != nil {
 		errors.Response(encoder, w, err)
 		return
@@ -213,7 +241,9 @@ func (f OpenAPIHandleFunc[T, K]) ServeHTTP(w http.ResponseWriter, r *http.Reques
 		status = http.StatusOK
 	}
 	w.WriteHeader(status)
-	encoder.Encode(v)
+	if status != http.StatusNoContent {
+		encoder.Encode(v)
+	}
 }
 
 type ctxStatus struct{}
@@ -222,8 +252,8 @@ type HttpResponse interface {
 	HttpResponse() errors.HttpResponse
 }
 
-func NewOperation[T, K any](
-	handler OpenAPIHandleFunc[T, K],
+func NewOperation[T, K, V, R any](
+	handler OpenAPIHandleFunc[T, K, V, R],
 	options ...OperationFunc,
 ) *Operation {
 	cOp := Operation{}
@@ -232,9 +262,11 @@ func NewOperation[T, K any](
 		fn(&cOp)
 	}
 
-	cOp.Request = new(T)
+	cOp.Path = new(T)
+	cOp.Header = new(K)
+	cOp.Request = new(V)
 	cOp.Responses = map[int]any{
-		cOp.Success: new(K),
+		cOp.Success: new(R),
 	}
 
 	for _, err := range cOp.Errors {
