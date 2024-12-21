@@ -1,5 +1,7 @@
 package openapi
 
+import "net/http"
+
 func NewOperation[T, K, V any, R Success](
 	handler OpenAPIHandleFunc[T, K, V, R],
 	options ...OperationFunc,
@@ -31,6 +33,44 @@ func NewOpNoBody[T any, R Success](
 		WithHeader(new(T)),
 		WithResponse(
 			GetStatus(new(R)), nil,
+		),
+	)
+	return Handle(
+		handler,
+		args...,
+	)
+}
+
+func NewOpNoBodyWithResponse[T, V any, R Success](
+	handler OpNoBodyWithResponse[T, V, R],
+	options ...OperationFunc,
+) *Operation {
+	args := make([]OperationFunc, len(options))
+	copy(args, options)
+	args = append(
+		args,
+		WithHeader(new(T)),
+		WithResponse(
+			GetStatus(new(R)), new(V),
+		),
+	)
+	return Handle(
+		handler,
+		args...,
+	)
+}
+
+func NewOpNoResponseBody[T, V any](
+	handler OpNoResponseBody[T, V],
+	options ...OperationFunc,
+) *Operation {
+	args := make([]OperationFunc, len(options))
+	copy(args, options)
+	args = append(
+		args,
+		WithHeader(new(T)),
+		WithResponse(
+			http.StatusNoContent, nil,
 		),
 	)
 	return Handle(

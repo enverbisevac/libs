@@ -5,11 +5,13 @@ import (
 	"encoding/xml"
 	"io"
 	"net/http"
+	"reflect"
+	"runtime"
 
 	"github.com/enverbisevac/libs/errors"
 	"github.com/enverbisevac/libs/httputil"
 	"github.com/go-chi/chi/v5"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 func GetStatus[T Success](object *T) int {
@@ -27,6 +29,7 @@ func Handle(
 	options ...OperationFunc,
 ) *Operation {
 	cOp := Operation{
+		ID:      nameOf(handler),
 		Handler: handler,
 	}
 
@@ -51,13 +54,17 @@ func Handle(
 	return &cOp
 }
 
-func EncodeResponse[T any, K Success](w http.ResponseWriter, encoder Encoder, value *T, status *K) {
+func EncodeResponse[T Success](w http.ResponseWriter, encoder Encoder, value any, status *T) {
 	stat, ok := any(status).(HttpStatus)
 	if ok {
 		w.WriteHeader(stat.HttpStatus())
 		if stat.HttpStatus() == http.StatusNoContent {
 			return
 		}
+	}
+
+	if value == nil {
+		return
 	}
 
 	err := encoder.Encode(value)
@@ -73,7 +80,7 @@ func DecodeRequest(r *http.Request, decoder Decoder, body any, args ...any) erro
 	}
 
 	for i := range args {
-		err = httputil.Decode(r, chi.URLParam, &args[i])
+		err = httputil.Decode(r, chi.URLParam, args[i])
 		if err != nil {
 			return err
 		}
@@ -111,4 +118,14 @@ func GetEncDec(w http.ResponseWriter, r *http.Request) (Encoder, Decoder) {
 	}
 
 	return encoder, decoder
+}
+
+func nameOf(f any) string {
+	v := reflect.ValueOf(f)
+	if v.Kind() == reflect.Func {
+		if rf := runtime.FuncForPC(v.Pointer()); rf != nil {
+			return rf.Name()
+		}
+	}
+	return v.String()
 }

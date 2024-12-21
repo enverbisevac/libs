@@ -58,5 +58,55 @@ func (f OpNoBody[T, R]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	EncodeResponse(w, encoder, (*T)(nil), status)
+	EncodeResponse(w, encoder, nil, status)
+}
+
+type OpNoBodyWithResponse[T, V any, R Success] func(ctx Context, in T, out *V) (*R, error)
+
+func (f OpNoBodyWithResponse[T, V, R]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	var header T
+
+	encoder, _ := GetEncDec(w, r)
+
+	err := httputil.Decode(r, chi.URLParam, &header)
+	if err != nil {
+		errors.Response(encoder, w, err)
+		return
+	}
+
+	var value V
+	status, err := f(Context{
+		Request: r,
+	}, header, &value)
+	if err != nil {
+		errors.Response(encoder, w, err)
+		return
+	}
+
+	EncodeResponse(w, encoder, &value, status)
+}
+
+type OpNoResponseBody[T, K any] func(ctx Context, header T, body K) (*NoContent, error)
+
+func (f OpNoResponseBody[T, K]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	var header T
+	var body K
+
+	encoder, decoder := GetEncDec(w, r)
+
+	err := DecodeRequest(r, decoder, &body, &header)
+	if err != nil {
+		errors.Response(encoder, w, err)
+		return
+	}
+
+	status, err := f(Context{
+		Request: r,
+	}, header, body)
+	if err != nil {
+		errors.Response(encoder, w, err)
+		return
+	}
+
+	EncodeResponse(w, encoder, nil, status)
 }
