@@ -42,8 +42,9 @@ func JSONResponse(w http.ResponseWriter, err error, options ...JSONResponseOptio
 	if err == nil {
 		return nil
 	}
+	unwrapErr := err
 again:
-	v, ok := err.(httpResponse)
+	v, ok := unwrapErr.(httpResponse)
 	if ok {
 		response := v.HttpResponse()
 		w.WriteHeader(response.Status)
@@ -52,8 +53,8 @@ again:
 		}
 		return nil
 	}
-	err = Unwrap(err)
-	if err != nil {
+	unwrapErr = Unwrap(err)
+	if unwrapErr != nil && unwrapErr.Error() != err.Error() {
 		goto again
 	}
 

@@ -128,3 +128,21 @@ type Request[T any, V any] struct {
 	Header T
 	Body   V
 }
+
+// type HandlerFunc[T any, R Success, K, V any] interface {
+// 	HandleFunc[T, K, V, R] | HandleFunc1[T, R] | HandleFunc4[T, V, R] | HandleFunc5[T, K]
+// }
+
+// func New[T any, R Success, B, O any, H HandlerFunc[T, R, B, O]](
+// 	handler H,
+// 	options ...OperationFunc,
+// ) *Operation {
+// 	switch arg := any(handler).(type) {
+// 	case HandleFunc[T, B, O, R]:
+// 		return NewOperation(arg, options...)
+// 	case HandleFunc1[T, R]:
+// 		return NewOpNoBody(arg, options...)
+// 	default:
+// 		panic("No handler type found")
+// 	}
+// }
