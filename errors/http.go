@@ -42,9 +42,9 @@ func JSONResponse(w http.ResponseWriter, err error, options ...JSONResponseOptio
 	if err == nil {
 		return nil
 	}
-	unwrapErr := err
+	orgErr := err
 again:
-	v, ok := unwrapErr.(httpResponse)
+	v, ok := err.(httpResponse)
 	if ok {
 		response := v.HttpResponse()
 		w.WriteHeader(response.Status)
@@ -53,13 +53,14 @@ again:
 		}
 		return nil
 	}
-	unwrapErr = Unwrap(err)
-	if unwrapErr != nil && unwrapErr.Error() != err.Error() {
+	err = Unwrap(err)
+	if err != nil {
 		goto again
 	}
 
+	w.WriteHeader(http.StatusInternalServerError)
 	return json.NewEncoder(w).Encode(HttpResponse{
-		Base:   NewBase(err.Error()),
+		Base:   NewBase(orgErr.Error()),
 		Status: http.StatusInternalServerError,
 	})
 }

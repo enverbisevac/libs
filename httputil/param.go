@@ -64,6 +64,12 @@ func QueryParam[T ParamTypes, K FromConstraint](from K, param string, validators
 		result = int(result.(int64))
 	case int64:
 		result, err = strconv.ParseInt(paramValue, 10, 64)
+	case *int64:
+		result, err = strconv.ParseInt(paramValue, 10, 64)
+		val, ok := result.(int64)
+		if ok {
+			result = &val
+		}
 	case bool:
 		result, err = strconv.ParseBool(paramValue)
 	case *bool:
