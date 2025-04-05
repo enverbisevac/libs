@@ -12,9 +12,7 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-var (
-	ErrClosed = errors.New("pubsub: subscriber is closed")
-)
+var ErrClosed = errors.New("pubsub: subscriber is closed")
 
 type PubSub struct {
 	config   Config
@@ -94,6 +92,7 @@ func (ps *PubSub) SubscribeChan(
 	options ...pubsub.SubscribeOption,
 ) (pubsub.Consumer, <-chan *pubsub.Msg) {
 	subscriber := ps.subscribe(ctx, topic, options...)
+	subscriber.startChannel()
 	return subscriber, subscriber.channel
 }
 
