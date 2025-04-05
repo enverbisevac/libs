@@ -72,9 +72,7 @@ func WithTopics(topics ...string) SubscribeOption {
 // WithNamespace returns an channel option that configures namespace.
 func WithChannelNamespace(value string) SubscribeOption {
 	return SubscribeOptionFunc(func(c *SubscribeConfig) {
-		if value != "" {
-			c.Namespace = value
-		}
+		c.Namespace = value
 	})
 }
 

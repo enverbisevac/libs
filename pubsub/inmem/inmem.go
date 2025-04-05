@@ -16,7 +16,7 @@ var ErrClosed = errors.New("pubsub: subscriber is closed")
 
 type PubSub struct {
 	config   Config
-	mutex    sync.Mutex
+	mutex    sync.RWMutex
 	registry []*inMemorySubscriber
 }
 
@@ -99,10 +99,14 @@ func (ps *PubSub) SubscribeChan(
 // Publish event to message broker with payload.
 func (ps *PubSub) Publish(ctx context.Context, topic string, payload []byte, opts ...pubsub.PublishOption) error {
 	log := logr.FromContextOrDiscard(ctx)
+	ps.mutex.RLock()
 	if len(ps.registry) == 0 {
 		log.V(1).Info("in pubsub Publish: no subscribers registered")
+		ps.mutex.RUnlock()
 		return nil
 	}
+	ps.mutex.RUnlock()
+
 	pubConfig := pubsub.PublishConfig{
 		App:       ps.config.App,
 		Namespace: ps.config.Namespace,
@@ -143,6 +147,9 @@ func (ps *PubSub) Publish(ctx context.Context, topic string, payload []byte, opt
 }
 
 func (r *PubSub) Close(_ context.Context) error {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
 	for _, subscriber := range r.registry {
 		if err := subscriber.Close(); err != nil {
 			return err
