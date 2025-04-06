@@ -61,7 +61,8 @@ func (ps *PubSub) subscribe(
 
 	// create subscriber and map it to the registry
 	subscriber := &inMemorySubscriber{
-		config: &config,
+		config:  &config,
+		channel: make(chan *pubsub.Msg, ps.config.ChannelSize),
 	}
 
 	config.Topics = append(config.Topics, topic)
@@ -92,20 +93,22 @@ func (ps *PubSub) SubscribeChan(
 	options ...pubsub.SubscribeOption,
 ) (pubsub.Consumer, <-chan *pubsub.Msg) {
 	subscriber := ps.subscribe(ctx, topic, options...)
-	subscriber.startChannel()
 	return subscriber, subscriber.channel
 }
 
 // Publish event to message broker with payload.
 func (ps *PubSub) Publish(ctx context.Context, topic string, payload []byte, opts ...pubsub.PublishOption) error {
 	log := logr.FromContextOrDiscard(ctx)
+
 	ps.mutex.RLock()
-	if len(ps.registry) == 0 {
+	subs := make([]*inMemorySubscriber, len(ps.registry))
+	copy(subs, ps.registry)
+	ps.mutex.RUnlock()
+
+	if len(subs) == 0 {
 		log.V(1).Info("in pubsub Publish: no subscribers registered")
-		ps.mutex.RUnlock()
 		return nil
 	}
-	ps.mutex.RUnlock()
 
 	pubConfig := pubsub.PublishConfig{
 		App:       ps.config.App,
@@ -117,7 +120,7 @@ func (ps *PubSub) Publish(ctx context.Context, topic string, payload []byte, opt
 
 	topic = pubsub.FormatTopic(pubConfig.App, pubConfig.Namespace, topic)
 	wg := sync.WaitGroup{}
-	for _, sub := range ps.registry {
+	for _, sub := range subs {
 		if slices.Contains(sub.topics, topic) && !sub.isClosed() {
 			wg.Add(1)
 			go func(subscriber *inMemorySubscriber) {
@@ -170,7 +173,6 @@ type inMemorySubscriber struct {
 
 func (s *inMemorySubscriber) start(ctx context.Context) {
 	log := logr.FromContextOrDiscard(ctx)
-	s.startChannel()
 	for {
 		select {
 		case <-ctx.Done():
@@ -192,8 +194,9 @@ func (s *inMemorySubscriber) startChannel() {
 }
 
 func (s *inMemorySubscriber) Subscribe(_ context.Context, topics ...string) error {
-	s.mutex.RLock()
-	defer s.mutex.RUnlock()
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
 	topics = s.formatTopics(topics...)
 	for _, ch := range topics {
 		if slices.Contains(s.topics, ch) {
@@ -205,8 +208,9 @@ func (s *inMemorySubscriber) Subscribe(_ context.Context, topics ...string) erro
 }
 
 func (s *inMemorySubscriber) Unsubscribe(_ context.Context, topics ...string) error {
-	s.mutex.RLock()
-	defer s.mutex.RUnlock()
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
 	topics = s.formatTopics(topics...)
 	for i, ch := range topics {
 		if slices.Contains(s.topics, ch) {
