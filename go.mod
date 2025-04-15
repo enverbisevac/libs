@@ -6,6 +6,7 @@ require (
 	github.com/redis/go-redis/v9 v9.4.0
 	github.com/smartystreets/goconvey v1.8.1
 	golang.org/x/exp v0.0.0-20230801115018-d63ba01acd4b
+	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/text v0.13.0
 	gopkg.in/yaml.v3 v3.0.1
 )

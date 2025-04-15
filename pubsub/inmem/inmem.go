@@ -2,7 +2,6 @@ package inmem
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -10,9 +9,8 @@ import (
 	"github.com/enverbisevac/libs/pubsub"
 	"github.com/go-logr/logr"
 	"golang.org/x/exp/slices"
+	"golang.org/x/sync/errgroup"
 )
-
-var ErrClosed = errors.New("pubsub: subscriber is closed")
 
 type PubSub struct {
 	config   Config
@@ -25,7 +23,7 @@ func New(options ...Option) *PubSub {
 	config := Config{
 		App:         "app",
 		Namespace:   "default",
-		SendTimeout: 60,
+		SendTimeout: 10 * time.Second,
 		ChannelSize: 100,
 	}
 
@@ -44,9 +42,6 @@ func (ps *PubSub) subscribe(
 	topic string,
 	options ...pubsub.SubscribeOption,
 ) *inMemorySubscriber {
-	ps.mutex.Lock()
-	defer ps.mutex.Unlock()
-
 	config := pubsub.SubscribeConfig{
 		Topics:      make([]string, 0, 8),
 		App:         ps.config.App,
@@ -63,13 +58,27 @@ func (ps *PubSub) subscribe(
 	subscriber := &inMemorySubscriber{
 		config:  &config,
 		channel: make(chan *pubsub.Msg, ps.config.ChannelSize),
+		onClose: func(subscriber *inMemorySubscriber) {
+			ps.mutex.Lock()
+			ps.registry = slices.DeleteFunc(ps.registry, func(s *inMemorySubscriber) bool {
+				for _, s1 := range ps.registry {
+					if s == s1 {
+						return true
+					}
+				}
+				return false
+			})
+			ps.mutex.Unlock()
+		},
 	}
 
 	config.Topics = append(config.Topics, topic)
 	subscriber.topics = subscriber.formatTopics(config.Topics...)
 
 	// register subscriber
+	ps.mutex.Lock()
 	ps.registry = append(ps.registry, subscriber)
+	ps.mutex.Unlock()
 
 	return subscriber
 }
@@ -100,12 +109,14 @@ func (ps *PubSub) SubscribeChan(
 func (ps *PubSub) Publish(ctx context.Context, topic string, payload []byte, opts ...pubsub.PublishOption) error {
 	log := logr.FromContextOrDiscard(ctx)
 
+	ctx = context.WithoutCancel(ctx)
+
 	ps.mutex.RLock()
-	subs := make([]*inMemorySubscriber, len(ps.registry))
-	copy(subs, ps.registry)
+	registry := make([]*inMemorySubscriber, len(ps.registry))
+	copy(registry, ps.registry)
 	ps.mutex.RUnlock()
 
-	if len(subs) == 0 {
+	if len(registry) == 0 {
 		log.V(1).Info("in pubsub Publish: no subscribers registered")
 		return nil
 	}
@@ -119,33 +130,32 @@ func (ps *PubSub) Publish(ctx context.Context, topic string, payload []byte, opt
 	}
 
 	topic = pubsub.FormatTopic(pubConfig.App, pubConfig.Namespace, topic)
-	wg := sync.WaitGroup{}
-	for _, sub := range subs {
-		if slices.Contains(sub.topics, topic) && !sub.isClosed() {
-			wg.Add(1)
-			go func(subscriber *inMemorySubscriber) {
-				defer wg.Done()
+	g, ctx := errgroup.WithContext(ctx)
+	for _, sub := range registry {
+		sub := sub
+		if sub.HasTopic(topic) && !sub.isClosed() {
+			g.Go(func() error {
 				// timer is based on subscriber data
-				t := time.NewTimer(subscriber.config.SendTimeout)
+				t := time.NewTimer(sub.config.SendTimeout)
 				defer t.Stop()
 				select {
 				case <-ctx.Done():
-					return
-				case subscriber.channel <- &pubsub.Msg{Topic: topic, Payload: payload}:
+					return ctx.Err()
+				case sub.channel <- &pubsub.Msg{Topic: topic, Payload: payload}:
 					log.V(1).Info(fmt.Sprintf("in pubsub Publish: message %v sent to topic %s", string(payload), topic))
+					return nil
 				case <-t.C:
 					// channel is full for topic (message is dropped)
-					log.V(1).Info(fmt.Sprintf("in pubsub Publish: %s topic is full for %s (message is dropped)",
-						topic, subscriber.config.SendTimeout))
+					return fmt.Errorf("in pubsub Publish: %s topic is full for %s (message is dropped)",
+						topic, sub.config.SendTimeout)
 				}
-			}(sub)
+			})
 		}
 	}
 
-	// Wait for all subscribers to complete
-	// Otherwise, we might fail notifying some subscribers due to context completion.
-	wg.Wait()
-
+	if err := g.Wait(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -165,10 +175,11 @@ type inMemorySubscriber struct {
 	config  *pubsub.SubscribeConfig
 	handler func(*pubsub.Msg) error
 	channel chan *pubsub.Msg
-	once    sync.Once
 	mutex   sync.RWMutex
 	topics  []string
 	closed  bool
+
+	onClose func(subscriber *inMemorySubscriber)
 }
 
 func (s *inMemorySubscriber) start(ctx context.Context) {
@@ -187,10 +198,6 @@ func (s *inMemorySubscriber) start(ctx context.Context) {
 			}
 		}
 	}
-}
-
-func (s *inMemorySubscriber) startChannel() {
-	s.channel = make(chan *pubsub.Msg, s.config.ChannelSize)
 }
 
 func (s *inMemorySubscriber) Subscribe(_ context.Context, topics ...string) error {
@@ -221,23 +228,34 @@ func (s *inMemorySubscriber) Unsubscribe(_ context.Context, topics ...string) er
 	return nil
 }
 
-func (s *inMemorySubscriber) Close() error {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
+func (s *inMemorySubscriber) HasTopic(topic string) bool {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
 
-	if s.closed {
-		return ErrClosed
+	return slices.Contains(s.topics, topic)
+}
+
+func (s *inMemorySubscriber) Close() error {
+	if s.isClosed() {
+		return nil
 	}
+
+	s.mutex.Lock()
 	s.closed = true
-	s.once.Do(func() {
-		close(s.channel)
-	})
+	s.mutex.Unlock()
+
+	close(s.channel)
+
+	if s.onClose != nil {
+		s.onClose(s)
+	}
+
 	return nil
 }
 
 func (s *inMemorySubscriber) isClosed() bool {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
 	return s.closed
 }
 
