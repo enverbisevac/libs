@@ -61,10 +61,8 @@ func (ps *PubSub) subscribe(
 		onClose: func(subscriber *inMemorySubscriber) {
 			ps.mutex.Lock()
 			ps.registry = slices.DeleteFunc(ps.registry, func(s *inMemorySubscriber) bool {
-				for _, s1 := range ps.registry {
-					if s == s1 {
-						return true
-					}
+				if s == subscriber {
+					return true
 				}
 				return false
 			})
