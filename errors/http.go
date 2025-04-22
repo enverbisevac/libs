@@ -1,6 +1,7 @@
 package errors
 
 import (
+	"cmp"
 	"encoding/json"
 	"net/http"
 )
@@ -73,6 +74,7 @@ func Response(encoder Encoder, w http.ResponseWriter, err error) {
 	if err == nil {
 		return
 	}
+	origErr := err
 again:
 	v, ok := err.(httpResponse)
 	if ok {
@@ -87,7 +89,7 @@ again:
 	}
 
 	encoder.Encode(HttpResponse{
-		Base:   NewBase(err.Error()),
+		Base:   NewBase(cmp.Or(err, origErr).Error()),
 		Status: http.StatusInternalServerError,
 	})
 }
