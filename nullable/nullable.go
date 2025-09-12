@@ -19,6 +19,7 @@ func New[T any](value T) Nullable[T] {
 		null:  false,
 	}
 }
+
 func (n *Nullable[T]) Set(value T) {
 	n.value = value
 	n.set = true
@@ -43,6 +44,13 @@ func (n Nullable[T]) IsSet() bool  { return n.set }
 func (n Nullable[T]) IsNull() bool { return n.set && n.null }
 func (n Nullable[T]) Value() (T, bool) {
 	return n.value, n.set && !n.null
+}
+
+func (n Nullable[T]) Ptr() *T {
+	if n.set && !n.null {
+		return &n.value
+	}
+	return nil
 }
 
 func (n Nullable[T]) ValueOrDefault(defaultValue T) T {
