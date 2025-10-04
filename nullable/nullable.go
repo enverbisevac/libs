@@ -40,8 +40,14 @@ func (n *Nullable[T]) Unset() {
 	n.value = zero
 }
 
-func (n Nullable[T]) IsSet() bool  { return n.set }
+func (n Nullable[T]) IsSet() bool { return n.set }
+
 func (n Nullable[T]) IsNull() bool { return n.set && n.null }
+
+func (n Nullable[T]) IsZero() bool {
+	return !n.set
+}
+
 func (n Nullable[T]) Value() (T, bool) {
 	return n.value, n.set && !n.null
 }
@@ -69,9 +75,9 @@ func (n Nullable[T]) MustValue() T {
 
 // MarshalJSON handles JSON serialization
 func (n Nullable[T]) MarshalJSON() ([]byte, error) {
-	if !n.set {
-		return []byte("null"), nil // Treat unset as null in JSON
-	}
+	// if !n.set {
+	// 	return []byte("null"), nil // Treat unset as null in JSON
+	// }
 	if n.null {
 		return []byte("null"), nil
 	}
@@ -92,12 +98,21 @@ func (n *Nullable[T]) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+func (n *Nullable[T]) Enum() []any {
+	var zero T
+	c, ok := any(zero).(interface{ Enum() []any })
+	if ok {
+		return c.Enum()
+	}
+	return nil
+}
+
 func (n *Nullable[T]) JSONSchema() (jsonschema.Schema, error) {
 	var schema jsonschema.Schema
 	var zero T
 
 	// Determine schema type based on zero value of T
-	switch any(zero).(type) {
+	switch _typ := any(zero).(type) {
 	case string:
 		schema.WithType(jsonschema.String.Type())
 	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
@@ -111,8 +126,16 @@ func (n *Nullable[T]) JSONSchema() (jsonschema.Schema, error) {
 	case map[string]any:
 		schema.WithType(jsonschema.Object.Type())
 	default:
-		schema.WithType(jsonschema.Object.Type())
+		obj, ok := _typ.(jsonschema.Exposer)
+		if ok {
+			schema, err := obj.JSONSchema()
+			if err != nil {
+				return schema, err
+			}
+		}
 	}
+
+	schema.AddType(jsonschema.Null)
 
 	return schema, nil
 }
