@@ -3,6 +3,7 @@ package errors
 import (
 	"cmp"
 	"encoding/json"
+	"errors"
 	"net/http"
 )
 
@@ -38,6 +39,33 @@ type HttpResponse struct {
 	Errors []string `json:"errors"`
 }
 
+func (r *HttpResponse) AsError() error {
+	errSlice := make(MarshalableErrors, len(r.Errors))
+	for i, v := range r.Errors {
+		errSlice[i] = errors.New(v)
+	}
+	switch r.Status {
+	case http.StatusBadRequest:
+		return &ValidationError{Base: r.Base, Errors: errSlice}
+	case http.StatusUnauthorized:
+		return &UnauthenticatedError{Base: r.Base}
+	case http.StatusForbidden:
+		return &UnauthorizedError{Base: r.Base}
+	case http.StatusNotFound:
+		return &NotFoundError{Base: r.Base}
+	case http.StatusConflict:
+		return &ConflictError{Base: r.Base, Errors: errSlice}
+	case http.StatusUnprocessableEntity:
+		return &ValidationError{Base: r.Base, Errors: errSlice}
+	case http.StatusInternalServerError:
+		return &InternalError{Base: r.Base}
+	case http.StatusNotImplemented:
+		return &NotImplementedError{Base: r.Base}
+	default:
+		return &InternalError{Base: r.Base}
+	}
+}
+
 func JSONResponse(w http.ResponseWriter, err error, options ...JSONResponseOption) error {
 	w.Header().Set("Content-Type", "application/problem+json")
 	if err == nil {
@@ -61,7 +89,7 @@ again:
 
 	w.WriteHeader(http.StatusInternalServerError)
 	return json.NewEncoder(w).Encode(HttpResponse{
-		Base:   NewBase(orgErr.Error()),
+		Base:   newBase(orgErr.Error()),
 		Status: http.StatusInternalServerError,
 	})
 }
@@ -89,7 +117,7 @@ again:
 	}
 
 	encoder.Encode(HttpResponse{
-		Base:   NewBase(cmp.Or(err, origErr).Error()),
+		Base:   newBase(cmp.Or(err, origErr).Error()),
 		Status: http.StatusInternalServerError,
 	})
 }

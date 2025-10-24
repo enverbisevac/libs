@@ -19,17 +19,11 @@ type Base struct {
 	Timestamp  time.Time `json:"timestamp,omitempty"`
 }
 
-func NewBase(format string, args ...any) Base {
+func newBase(format string, args ...any) Base {
 	return Base{
 		Msg:       fmt.Sprintf(format, args...),
 		Timestamp: time.Now(),
 	}
-}
-
-func NewBaseWithStatus(statusCode string, format string, args ...any) Base {
-	base := NewBase(format, args...)
-	base.StatusCode = statusCode
-	return base
 }
 
 func (b *Base) SetTraceID(id string) {
@@ -71,7 +65,7 @@ func Conflict(format string, args ...any) *ConflictError {
 
 	return &ConflictError{
 		Item: item,
-		Base: NewBase(format, args...),
+		Base: newBase(format, args...),
 	}
 }
 
@@ -144,7 +138,7 @@ func NotFound(format string, args ...any) *NotFoundError {
 	format, item := parse(format, args...)
 	return &NotFoundError{
 		Item: item,
-		Base: NewBase(format, args...),
+		Base: newBase(format, args...),
 	}
 }
 
@@ -196,7 +190,7 @@ type InternalError struct {
 // Internal is a helper function to return an internal Error.
 func Internal(err error, format string, args ...any) *InternalError {
 	return &InternalError{
-		Base:       NewBase(format, args...),
+		Base:       newBase(format, args...),
 		Err:        err,
 		Stacktrace: debug.Stack(),
 	}
@@ -242,7 +236,7 @@ type PreconditionFailedError struct {
 // Internal is a helper function to return an internal Error.
 func PreconditionFailed(format string, args ...interface{}) *PreconditionFailedError {
 	return &PreconditionFailedError{
-		Base: NewBase(format, args...),
+		Base: newBase(format, args...),
 	}
 }
 
@@ -301,7 +295,7 @@ type ValidationError struct {
 // Validation is a helper function to return an invalid argument Error.
 func Validation(format string, args ...any) *ValidationError {
 	return &ValidationError{
-		Base: NewBase(format, args...),
+		Base: newBase(format, args...),
 	}
 }
 
@@ -357,7 +351,7 @@ type NotImplementedError struct {
 // InvalidArgument is a helper function to return an invalid argument Error.
 func NotImplemented(format string, args ...any) *NotImplementedError {
 	return &NotImplementedError{
-		Base: NewBase(format, args...),
+		Base: newBase(format, args...),
 	}
 }
 
@@ -387,12 +381,20 @@ type UnauthenticatedError struct {
 
 func Unauthenticated(format string, args ...any) *UnauthenticatedError {
 	return &UnauthenticatedError{
-		Base: NewBase(format, args...),
+		Base: newBase(format, args...),
 	}
 }
 
 func IsUnauthenticated(err error) bool {
 	return errors.Is(err, &UnauthenticatedError{})
+}
+
+func AsUnautenticated(err error) (verr *ValidationError, b bool) {
+	if errors.As(err, &verr) {
+		return verr, true
+	}
+
+	return nil, false
 }
 
 func (e *UnauthenticatedError) Error() string {
@@ -416,12 +418,20 @@ type UnauthorizedError struct {
 
 func Unauthorized(format string, args ...any) *UnauthorizedError {
 	return &UnauthorizedError{
-		Base: NewBase(format, args...),
+		Base: newBase(format, args...),
 	}
 }
 
 func IsUnauthorized(err error) bool {
 	return errors.Is(err, &UnauthorizedError{})
+}
+
+func AsUnauthorized(err error) (verr *ValidationError, b bool) {
+	if errors.As(err, &verr) {
+		return verr, true
+	}
+
+	return nil, false
 }
 
 func (e *UnauthorizedError) Error() string {
