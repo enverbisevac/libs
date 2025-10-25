@@ -6,21 +6,11 @@ PKGS ?= $(shell $(GO) list ./...)
 
 # List of tools and their binary names (latest versions)
 TOOLS := \
-	"goimports:goimports" \
-	"golangci-lint:golangci-lint" \
-	"gofumpt:gofumpt" \
+	"golang.org/x/tools/cmd/goimports:goimports" \
+	"github.com/golangci/golangci-lint/cmd/golangci-lint:golangci-lint" \
+	"mvdan.cc/gofumpt:gofumpt" \
+	"honnef.co/go/tools/cmd/staticcheck:staticcheck" \
 	"staticcheck:staticcheck"
-
-# Function to install a tool if missing
-define INSTALL_TOOL
-	@bin_path="$(GOBIN)/$(2)"; \
-	if [ ! -f $$bin_path ]; then \
-		echo "Installing/updating $(2) to latest..."; \
-		$(GO) install $(1)@latest; \
-	else \
-		echo "$(2) already installed."; \
-	fi
-endef
 
 .PHONY: all update-tools fmt fmt-fumpt lint staticcheck modernize test ci
 
