@@ -75,9 +75,9 @@ func (n Nullable[T]) MustValue() T {
 
 // MarshalJSON handles JSON serialization
 func (n Nullable[T]) MarshalJSON() ([]byte, error) {
-	// if !n.set {
-	// 	return []byte("null"), nil // Treat unset as null in JSON
-	// }
+	if !n.set {
+		return []byte("{}"), nil // Treat unset as {} in JSON
+	}
 	if n.null {
 		return []byte("null"), nil
 	}
@@ -88,6 +88,10 @@ func (n Nullable[T]) MarshalJSON() ([]byte, error) {
 func (n *Nullable[T]) UnmarshalJSON(data []byte) error {
 	if string(data) == "null" {
 		n.SetNull()
+		return nil
+	}
+	if string(data) == "{}" {
+		n.Unset()
 		return nil
 	}
 	var v T
