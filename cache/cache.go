@@ -18,9 +18,7 @@ type config struct {
 
 type CacheConfigFunc func(*config)
 
-var (
-	DefaultTTL = 1 * time.Hour
-)
+var DefaultTTL = 1 * time.Hour
 
 func TTL(duration time.Duration) CacheConfigFunc {
 	return func(c *config) {

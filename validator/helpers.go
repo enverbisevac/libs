@@ -22,6 +22,7 @@ package validator
 import (
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -51,12 +52,7 @@ func Matches(value string, rx *regexp.Regexp) bool {
 }
 
 func In[T comparable](value T, safelist ...T) bool {
-	for i := range safelist {
-		if value == safelist[i] {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(safelist, value)
 }
 
 func AllIn[T comparable](values []T, safelist ...T) bool {
@@ -69,12 +65,7 @@ func AllIn[T comparable](values []T, safelist ...T) bool {
 }
 
 func NotIn[T comparable](value T, blocklist ...T) bool {
-	for i := range blocklist {
-		if value == blocklist[i] {
-			return false
-		}
-	}
-	return true
+	return !slices.Contains(blocklist, value)
 }
 
 func NoDuplicates[T comparable](values []T) bool {

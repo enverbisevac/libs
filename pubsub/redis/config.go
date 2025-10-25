@@ -66,7 +66,6 @@ func WithSize(value int) Option {
 
 type SubscribeConfig struct {
 	topics         []string
-	app            string
 	namespace      string
 	healthInterval time.Duration
 	sendTimeout    time.Duration

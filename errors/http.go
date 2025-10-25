@@ -23,7 +23,7 @@ func (f JSONResponseFunc) Apply(b *Base) {
 
 func ProcessStatus(fn func(status string) error) JSONResponseFunc {
 	return func(b *Base) {
-		fn(b.StatusCode)
+		_ = fn(b.StatusCode)
 	}
 }
 
@@ -108,7 +108,7 @@ again:
 	if ok {
 		response := v.HttpResponse()
 		w.WriteHeader(response.Status)
-		encoder.Encode(response)
+		_ = encoder.Encode(response)
 		return
 	}
 	err = Unwrap(err)
@@ -116,7 +116,7 @@ again:
 		goto again
 	}
 
-	encoder.Encode(HttpResponse{
+	_ = encoder.Encode(HttpResponse{
 		Base:   newBase(cmp.Or(err, origErr).Error()),
 		Status: http.StatusInternalServerError,
 	})

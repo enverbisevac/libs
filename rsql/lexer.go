@@ -147,6 +147,7 @@ func (l *Lexer) readRune() {
 	l.position = l.readPosition
 	l.readPosition += size
 }
+
 func (l *Lexer) peekRune() rune {
 	if l.readPosition >= len(l.input) {
 		return 0
@@ -169,6 +170,7 @@ func (l *Lexer) readIdentifier() string {
 
 	return l.input[position:l.position]
 }
+
 func (l *Lexer) readNumber() (string, bool) {
 	isFloat := false
 
@@ -183,6 +185,7 @@ func (l *Lexer) readNumber() (string, bool) {
 
 	return l.input[position:l.position], isFloat
 }
+
 func (l *Lexer) readString(st rune) string {
 	position := l.position + 1
 	escape := false
@@ -204,8 +207,8 @@ func (l *Lexer) readString(st rune) string {
 	}
 
 	return l.input[position:l.position]
-
 }
+
 func (l *Lexer) readFIQL() Token {
 	l.readRune()
 	s := l.readIdentifier()
@@ -246,6 +249,7 @@ func isLetter(r rune) bool {
 
 	return unicode.IsPrint(r)
 }
+
 func isNumber(r rune) bool {
 	if '0' <= r && r <= '9' || r == '.' {
 		return true

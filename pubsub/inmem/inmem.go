@@ -61,10 +61,7 @@ func (ps *PubSub) subscribe(
 		onClose: func(subscriber *inMemorySubscriber) {
 			ps.mutex.Lock()
 			ps.registry = slices.DeleteFunc(ps.registry, func(s *inMemorySubscriber) bool {
-				if s == subscriber {
-					return true
-				}
-				return false
+				return s == subscriber
 			})
 			ps.mutex.Unlock()
 		},
@@ -130,7 +127,6 @@ func (ps *PubSub) Publish(ctx context.Context, topic string, payload []byte, opt
 	topic = pubsub.FormatTopic(pubConfig.App, pubConfig.Namespace, topic)
 	g, ctx := errgroup.WithContext(ctx)
 	for _, sub := range registry {
-		sub := sub
 		if sub.HasTopic(topic) && !sub.isClosed() {
 			g.Go(func() error {
 				// timer is based on subscriber data

@@ -1,4 +1,4 @@
-package nullable
+package types
 
 import (
 	"encoding/json"
@@ -6,65 +6,65 @@ import (
 	"github.com/swaggest/jsonschema-go"
 )
 
-type Nullable[T any] struct {
+type Optional[T any] struct {
 	set   bool
 	null  bool
 	value T
 }
 
-func New[T any](value T) Nullable[T] {
-	return Nullable[T]{
+func New[T any](value T) Optional[T] {
+	return Optional[T]{
 		value: value,
 		set:   true,
 		null:  false,
 	}
 }
 
-func (n *Nullable[T]) Set(value T) {
+func (n *Optional[T]) Set(value T) {
 	n.value = value
 	n.set = true
 	n.null = false
 }
 
-func (n *Nullable[T]) SetNull() {
+func (n *Optional[T]) SetNull() {
 	n.set = true
 	n.null = true
 }
 
-func (n *Nullable[T]) Unset() {
+func (n *Optional[T]) Unset() {
 	n.set = false
 	n.null = false
 	var zero T
 	n.value = zero
 }
 
-func (n Nullable[T]) IsSet() bool { return n.set }
+func (n Optional[T]) IsSet() bool { return n.set }
 
-func (n Nullable[T]) IsNull() bool { return n.set && n.null }
+func (n Optional[T]) IsNull() bool { return n.set && n.null }
 
-func (n Nullable[T]) IsZero() bool {
+func (n Optional[T]) IsZero() bool {
 	return !n.set
 }
 
-func (n Nullable[T]) Value() (T, bool) {
+func (n Optional[T]) Value() (T, bool) {
 	return n.value, n.set && !n.null
 }
 
-func (n Nullable[T]) Ptr() *T {
+func (n Optional[T]) Ptr() *T {
 	if n.set && !n.null {
 		return &n.value
 	}
 	return nil
 }
 
-func (n Nullable[T]) ValueOrDefault(defaultValue T) T {
+func (n Optional[T]) ValueOrDefault(defaultValue T) T {
 	if n.set && !n.null {
 		return n.value
 	}
 	return defaultValue
 }
 
-func (n Nullable[T]) MustValue() T {
+func (n Optional[T]) MustValue() T {
 	if n.set && !n.null {
 		return n.value
 	}
@@ -72,7 +72,7 @@ func (n Nullable[T]) MustValue() T {
 }
 
 // MarshalJSON handles JSON serialization
-func (n Nullable[T]) MarshalJSON() ([]byte, error) {
+func (n Optional[T]) MarshalJSON() ([]byte, error) {
 	if !n.set {
 		return []byte("{}"), nil // Treat unset as {} in JSON
 	}
@@ -83,7 +83,7 @@ func (n Nullable[T]) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON handles JSON deserialization
-func (n *Nullable[T]) UnmarshalJSON(data []byte) error {
+func (n *Optional[T]) UnmarshalJSON(data []byte) error {
 	if string(data) == "null" {
 		n.SetNull()
 		return nil
@@ -100,7 +100,7 @@ func (n *Nullable[T]) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (n *Nullable[T]) Enum() []any {
+func (n *Optional[T]) Enum() []any {
 	var zero T
 	c, ok := any(zero).(interface{ Enum() []any })
 	if ok {
@@ -109,7 +109,7 @@ func (n *Nullable[T]) Enum() []any {
 	return nil
 }
 
-func (n *Nullable[T]) JSONSchema() (jsonschema.Schema, error) {
+func (n *Optional[T]) JSONSchema() (jsonschema.Schema, error) {
 	var schema jsonschema.Schema
 	var zero T
 

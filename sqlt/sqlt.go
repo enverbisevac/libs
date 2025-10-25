@@ -15,7 +15,6 @@ var templateRegistry = make(map[string]*template.Template)
 
 // RegisterTemplate parses and stores a template in the registry
 func RegisterTemplate(name, tmpl string) error {
-
 	tmpl = strings.ReplaceAll(tmpl, "\n\t", " ")
 	tmpl = strings.ReplaceAll(tmpl, "\n", " ")
 	tmpl = strings.ReplaceAll(tmpl, "\t", " ")

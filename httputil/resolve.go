@@ -66,7 +66,7 @@ func resolveValue(field reflect.Value, typ reflect.Type, value string) error {
 }
 
 // resolve the string value to the proper type and return the value
-func resolve(t interface{}, v string) (interface{}, error) {
+func resolve(t any, v string) (any, error) {
 	switch t.(type) {
 	case string, nullable.Nullable[string]:
 		return v, nil

@@ -2,7 +2,6 @@ package rsql
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 
 	. "github.com/smartystreets/goconvey/convey"
@@ -222,6 +221,7 @@ func testInteger(t *testing.T, e Expression, value int64) bool {
 
 	return true
 }
+
 func testFloat(t *testing.T, e Expression, value float64) bool {
 	literal, ok := e.(*Float)
 	if !ok {
@@ -241,6 +241,7 @@ func testFloat(t *testing.T, e Expression, value float64) bool {
 
 	return true
 }
+
 func testBool(t *testing.T, e Expression, value bool) bool {
 	literal, ok := e.(*Bool)
 	if !ok {
@@ -260,6 +261,7 @@ func testBool(t *testing.T, e Expression, value bool) bool {
 
 	return true
 }
+
 func testNull(t *testing.T, e Expression) bool {
 	literal, ok := e.(*Null)
 	if !ok {
@@ -273,6 +275,7 @@ func testNull(t *testing.T, e Expression) bool {
 
 	return true
 }
+
 func testIdentifier(t *testing.T, e Expression, value string) bool {
 	literal, ok := e.(*Identifier)
 	if !ok {
@@ -291,10 +294,4 @@ func testIdentifier(t *testing.T, e Expression, value string) bool {
 	}
 
 	return true
-}
-
-func TestReplace(t *testing.T) {
-	if `name's` != strings.Replace(`name\'s`, `\'`, `'`, -1) {
-		t.Error("FAILED")
-	}
 }

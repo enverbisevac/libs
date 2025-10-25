@@ -11,7 +11,7 @@ import (
 type RequestURLParam func(r *http.Request, key string) string
 
 // Decode an HTTP request into the provided struct
-func Decode(r *http.Request, fn RequestURLParam, data interface{}) error {
+func Decode(r *http.Request, fn RequestURLParam, data any) error {
 	typ := reflect.TypeOf(data)
 	if typ == nil {
 		return fmt.Errorf("invalid decode type: nil")
@@ -28,7 +28,7 @@ func Decode(r *http.Request, fn RequestURLParam, data interface{}) error {
 	}, data)
 }
 
-func decodeRequest(r *http.Request, t reflect.Type, fn URLParam, data interface{}) error {
+func decodeRequest(r *http.Request, t reflect.Type, fn URLParam, data any) error {
 	_, err := decodeStruct(r, t, fn, data)
 	if err != nil {
 		return err
@@ -42,7 +42,7 @@ func decodeRequest(r *http.Request, t reflect.Type, fn URLParam, data interface{
 	return nil
 }
 
-func decodeStruct(r *http.Request, t reflect.Type, fn URLParam, data interface{}) (bool, error) {
+func decodeStruct(r *http.Request, t reflect.Type, fn URLParam, data any) (bool, error) {
 	query := r.URL.Query()
 	body := false
 	for i := 0; i < t.NumField(); i++ {

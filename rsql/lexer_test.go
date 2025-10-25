@@ -37,6 +37,7 @@ func TestReservedToken(t *testing.T) {
 		}
 	})
 }
+
 func TestNextToken(t *testing.T) {
 	input := `director=='name\'s';actor=eq="name's";Year=le=2000,Year>=2010;(one <= -1.0, two != true),three=in=(1,2,3);three=out=(4,5,6)`
 	tests := []struct {

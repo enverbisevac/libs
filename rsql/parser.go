@@ -89,6 +89,7 @@ func DefaultParse(in string) *Program {
 func (p *Parser) registerPrefix(tokenType TokenType, fn prefixParseFn) {
 	p.prefixParseFns[tokenType] = fn
 }
+
 func (p *Parser) registerInfix(tokenType TokenType, fn infixParseFn) {
 	p.infixParseFns[tokenType] = fn
 }
@@ -97,6 +98,7 @@ func (p *Parser) registerInfix(tokenType TokenType, fn infixParseFn) {
 func (p *Parser) Errors() []string {
 	return p.errors
 }
+
 func (p *Parser) peekError(t TokenType) {
 	msg := fmt.Sprintf("expected next token to be %s, got %s instad",
 		t, p.peekToken.Type)
@@ -107,12 +109,15 @@ func (p *Parser) nextToken() {
 	p.curToken = p.peekToken
 	p.peekToken = p.l.NextToken()
 }
+
 func (p *Parser) curTokenIs(t TokenType) bool {
 	return p.curToken.Type == t
 }
+
 func (p *Parser) peekTokenIs(t TokenType) bool {
 	return p.peekToken.Type == t
 }
+
 func (p *Parser) expectPeek(t TokenType) bool {
 	if p.peekTokenIs(t) {
 		p.nextToken()
@@ -121,12 +126,14 @@ func (p *Parser) expectPeek(t TokenType) bool {
 	p.peekError(t)
 	return false
 }
+
 func (p *Parser) peekPrecedence() int {
 	if p, ok := precidences[p.peekToken.Type]; ok {
 		return p
 	}
 	return PrecedenceLowest
 }
+
 func (p *Parser) curPrecedence() int {
 	if p, ok := precidences[p.curToken.Type]; ok {
 		return p
@@ -149,18 +156,21 @@ func (p *Parser) ParseProgram() *Program {
 
 	return program
 }
+
 func (p *Parser) parseStatement() Statement {
 	switch p.curToken.Type {
 	default:
 		return p.parseExpressionStatement()
 	}
 }
+
 func (p *Parser) parseExpressionStatement() *ExpressionStatement {
 	stmt := &ExpressionStatement{Token: p.curToken}
 	stmt.Expression = p.parseExpression(PrecedenceLowest)
 
 	return stmt
 }
+
 func (p *Parser) parseExpression(precedence int) Expression {
 	prefix := p.prefixParseFns[p.curToken.Type]
 	if prefix == nil {
@@ -183,9 +193,11 @@ func (p *Parser) parseExpression(precedence int) Expression {
 
 	return leftExp
 }
+
 func (p *Parser) parseIdentifier() Expression {
 	return &Identifier{Token: p.curToken, Value: p.curToken.Literal}
 }
+
 func (p *Parser) parseInteger() Expression {
 	lit := &Integer{Token: p.curToken}
 
@@ -199,6 +211,7 @@ func (p *Parser) parseInteger() Expression {
 	lit.Value = value
 	return lit
 }
+
 func (p *Parser) parseFloat() Expression {
 	lit := &Float{Token: p.curToken}
 
@@ -212,24 +225,29 @@ func (p *Parser) parseFloat() Expression {
 	lit.Value = value
 	return lit
 }
+
 func (p *Parser) parseBool() Expression {
 	return &Bool{Token: p.curToken, Value: p.curTokenIs(TokTRUE)}
 }
+
 func (p *Parser) parseString() Expression {
 	s := p.curToken.Literal
-	s = strings.Replace(s, `\'`, `'`, -1)
-	s = strings.Replace(s, `\"`, `"`, -1)
+	s = strings.ReplaceAll(s, `\'`, `'`)
+	s = strings.ReplaceAll(s, `\"`, `"`)
 
 	return &String{Token: p.curToken, Value: s}
 }
+
 func (p *Parser) parseNull() Expression {
 	return &Null{Token: p.curToken}
 }
+
 func (p *Parser) parseArray() Expression {
 	array := &Array{Token: p.curToken}
 	array.Elements = p.parseExpressionList(TokRBracket)
 	return array
 }
+
 func (p *Parser) parseExpressionList(end TokenType) []Expression {
 	var list []Expression
 
@@ -252,6 +270,7 @@ func (p *Parser) parseExpressionList(end TokenType) []Expression {
 
 	return list
 }
+
 func (p *Parser) parseInfixExpression(left Expression) Expression {
 	expression := &InfixExpression{
 		Token:    p.curToken,
@@ -265,6 +284,7 @@ func (p *Parser) parseInfixExpression(left Expression) Expression {
 
 	return expression
 }
+
 func (p *Parser) parseGroupedExpression() Expression {
 	p.nextToken()
 

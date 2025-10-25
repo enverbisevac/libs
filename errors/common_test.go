@@ -65,7 +65,6 @@ func (e *mergeConflictError) Error() string {
 }
 
 func TestConflictWithDetail(t *testing.T) {
-
 	base := "main"
 	head := "dev"
 
@@ -94,7 +93,6 @@ func TestConflictWithDetail(t *testing.T) {
 }
 
 func TestNotFound(t *testing.T) {
-
 	err := NotFound("article 123 not found")
 
 	if !IsNotFound(err) {
@@ -195,7 +193,6 @@ func TestNotFoundJSON(t *testing.T) {
 }
 
 func TestValidation(t *testing.T) {
-
 	err := Validation("article validation error").
 		AddError(errors.New("title is required field")).
 		AddError(Validation("status must be one of the values [draft, published]"))

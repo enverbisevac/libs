@@ -141,7 +141,7 @@ func (p *Pages[T]) BuildLinks(baseURL string, defaultPerPage int) [4]string {
 		links[2] = fmt.Sprintf("%v%v=%v", baseURL, PageVar, page+1)
 	}
 	if perPage := p.PerPage; perPage != defaultPerPage {
-		for i := 0; i < 4; i++ {
+		for i := range 4 {
 			if links[i] != "" {
 				links[i] += fmt.Sprintf("&%v=%v", PageSizeVar, perPage)
 			}

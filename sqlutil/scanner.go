@@ -3,7 +3,7 @@ package sqlutil
 // Scannable represents an object that can be scanned into a destination.
 // It provides a Scan method that populates the destination arguments with the values from the object.
 type Scannable interface {
-	Scan(dest ...interface{}) error
+	Scan(dest ...any) error
 }
 
 // Rows represents a database result set that can be iterated over.
@@ -12,7 +12,7 @@ type Rows interface {
 	Close() error
 	Err() error
 	Next() bool
-	Scan(dest ...interface{}) error
+	Scan(dest ...any) error
 }
 
 // ScanRows iterates over database rows and applies the provided scan function to each row.

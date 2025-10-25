@@ -28,7 +28,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"strings"
 )
 
 type Client struct {
@@ -161,11 +160,6 @@ func (c *Client) stream(ctx context.Context, rawurl, method string, in any, opti
 		errorResponse := ErrorResponse{}
 		if decodeErr := json.NewDecoder(resp.Body).Decode(&errorResponse); decodeErr != nil {
 			return nil, decodeErr
-		}
-
-		message := strings.TrimSpace(errorResponse.Payload)
-		if message == "" {
-			message = "Empty response from server."
 		}
 
 		return nil, errorResponse

@@ -1,6 +1,6 @@
 module github.com/enverbisevac/libs
 
-go 1.25
+go 1.24
 
 require (
 	github.com/redis/go-redis/v9 v9.4.0

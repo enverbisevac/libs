@@ -12,8 +12,7 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-type RedisPubSub interface {
-}
+type RedisPubSub any
 
 type PubSub struct {
 	config   Config
