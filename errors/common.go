@@ -95,6 +95,18 @@ func (e *ConflictError) Error() string {
 	return "resource already exist"
 }
 
+func (e *ConflictError) ErrorDetails() string {
+	sb := strings.Builder{}
+	sb.WriteString(e.Error())
+	sb.WriteString("\n\n")
+	for _, err := range e.Errors {
+		sb.WriteString("\t" + err.Error())
+		sb.WriteString("\n")
+	}
+
+	return sb.String()
+}
+
 // HttpResponse returns http response for ConflictError.
 func (e *ConflictError) HttpResponse() HttpResponse {
 	slice := make([]string, len(e.Errors))
@@ -168,6 +180,10 @@ func (e *NotFoundError) Error() string {
 	return "resource not found"
 }
 
+func (e *NotFoundError) ErrorDetails() string {
+	return e.Error()
+}
+
 // HttpResponse returns http response for NotFoundError.
 func (e *NotFoundError) HttpResponse() HttpResponse {
 	return HttpResponse{
@@ -219,6 +235,23 @@ func (e *InternalError) Error() string {
 	return "internal server error"
 }
 
+func (e *InternalError) ErrorDetails() string {
+	sb := strings.Builder{}
+	sb.WriteString(e.Error())
+	sb.WriteString("\n\n")
+
+	if e.Err != nil {
+		sb.WriteString("Caused by:\n")
+		sb.WriteString("\t" + e.Err.Error())
+	}
+
+	sb.WriteString("\tStacktrace:\n")
+	sb.WriteString("\t")
+	sb.Write(e.Stacktrace)
+
+	return sb.String()
+}
+
 // HttpResponse returns http response for InternalError.
 func (e *InternalError) HttpResponse() HttpResponse {
 	return HttpResponse{
@@ -250,6 +283,19 @@ func (e *PreconditionFailedError) Error() string {
 		return e.Msg
 	}
 	return "precondition failed error"
+}
+
+func (e *PreconditionFailedError) ErrorDetails() string {
+	sb := strings.Builder{}
+	sb.WriteString(e.Error())
+	sb.WriteString("\n\n")
+
+	if e.Err != nil {
+		sb.WriteString("Caused by:\n")
+		sb.WriteString("\t" + e.Err.Error())
+	}
+
+	return sb.String()
 }
 
 // HttpResponse returns http response for PreconditionFailedError.
@@ -319,6 +365,19 @@ func (e *ValidationError) Error() string {
 	return "validation error"
 }
 
+func (e *ValidationError) ErrorDetails() string {
+	sb := strings.Builder{}
+	sb.WriteString(e.Error())
+	sb.WriteString("\n\n")
+
+	for _, err := range e.Errors {
+		sb.WriteString("\t - " + err.Error())
+		sb.WriteString("\n")
+	}
+
+	return sb.String()
+}
+
 func (e *ValidationError) AsError() error {
 	if e == nil || (len(e.Errors) == 0 && e.Msg == "") {
 		return nil
@@ -380,6 +439,10 @@ func (e *NotImplementedError) Error() string {
 	return "operation not implemented"
 }
 
+func (e *NotImplementedError) ErrorDetails() string {
+	return e.Error()
+}
+
 // HttpResponse returns http response for NotImplementedError.
 func (e *NotImplementedError) HttpResponse() HttpResponse {
 	return HttpResponse{
@@ -415,6 +478,10 @@ func (e *UnauthenticatedError) Error() string {
 		return e.Msg
 	}
 	return "unauthenticated"
+}
+
+func (e *UnauthenticatedError) ErrorDetails() string {
+	return e.Error()
 }
 
 // HttpResponse returns http response for UnauthenticatedError.
@@ -459,5 +526,18 @@ func (e *UnauthorizedError) HttpResponse() HttpResponse {
 	return HttpResponse{
 		Base:   e.Base,
 		Status: http.StatusForbidden,
+	}
+}
+
+func (e *UnauthorizedError) ErrorDetails() string {
+	return e.Error()
+}
+
+func Details(err error) error {
+	switch e := err.(type) {
+	case interface{ ErrorDetails() string }:
+		return errors.New(e.ErrorDetails())
+	default:
+		return errors.New(err.Error())
 	}
 }

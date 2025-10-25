@@ -20,8 +20,8 @@ func TestConflict(t *testing.T) {
 
 	c, _ := AsConflict(err)
 
-	if c.HttpStatus() != http.StatusConflict {
-		t.Errorf("expected http status 409, got: %d", c.HttpStatus())
+	if c.HttpResponse().Status != http.StatusConflict {
+		t.Errorf("expected http status 409, got: %d", c.HttpResponse().Status)
 	}
 
 	if c.Error() != msg {
@@ -38,8 +38,8 @@ func TestConflictItem(t *testing.T) {
 
 	c, _ := AsConflict(err)
 
-	if c.HttpStatus() != http.StatusConflict {
-		t.Errorf("expected http status 409, got: %d", c.HttpStatus())
+	if c.HttpResponse().Status != http.StatusConflict {
+		t.Errorf("expected http status 409, got: %d", c.HttpResponse().Status)
 	}
 
 	msg := fmt.Sprintf("article %d already exist", 123)
@@ -84,8 +84,8 @@ func TestConflictWithDetail(t *testing.T) {
 		t.Errorf("expected length of files should be 1, got: %d", len(cerr.Files))
 	}
 
-	if cerr.HttpStatus() != http.StatusConflict {
-		t.Errorf("expected http status 409, got: %d", cerr.HttpStatus())
+	if cerr.HttpResponse().Status != http.StatusConflict {
+		t.Errorf("expected http status 409, got: %d", cerr.HttpResponse().Status)
 	}
 
 	if cerr.Files[0] != "test.txt" {
@@ -107,8 +107,8 @@ func TestNotFound(t *testing.T) {
 		t.Errorf("expected not found error, got: %v", err)
 	}
 
-	if c.HttpStatus() != http.StatusNotFound {
-		t.Errorf("expected http status 400, got: %d", c.HttpStatus())
+	if c.HttpResponse().Status != http.StatusNotFound {
+		t.Errorf("expected http status 400, got: %d", c.HttpResponse().Status)
 	}
 
 	if c.Error() != "article 123 not found" {
@@ -158,8 +158,8 @@ func TestNotFoundWithDetail(t *testing.T) {
 		t.Errorf("expected length of path should be greater than 0, got: %d", len(cerr.Path))
 	}
 
-	if cerr.HttpStatus() != http.StatusNotFound {
-		t.Errorf("expected http status 404, got: %d", cerr.HttpStatus())
+	if cerr.HttpResponse().Status != http.StatusNotFound {
+		t.Errorf("expected http status 404, got: %d", cerr.HttpResponse().Status)
 	}
 
 	if cerr.Path != "/users" {
@@ -210,8 +210,8 @@ func TestValidation(t *testing.T) {
 		t.Errorf("expected validation error, got: %v", err)
 	}
 
-	if c.HttpStatus() != http.StatusBadRequest {
-		t.Errorf("expected http status 400, got: %d", c.HttpStatus())
+	if c.HttpResponse().Status != http.StatusBadRequest {
+		t.Errorf("expected http status 400, got: %d", c.HttpResponse().Status)
 	}
 
 	if c.Error() != "article validation error" {
@@ -243,7 +243,7 @@ func TestConflictError_HttpStatus(t *testing.T) {
 					Msg: tt.fields.Msg,
 				},
 			}
-			if got := e.HttpStatus(); got != tt.want {
+			if got := e.HttpResponse().Status; got != tt.want {
 				t.Errorf("ConflictError.HttpStatus() = %v, want %v", got, tt.want)
 			}
 		})
@@ -270,7 +270,7 @@ func TestNotFoundError_HttpStatus(t *testing.T) {
 					Msg: tt.fields.Msg,
 				},
 			}
-			if got := e.HttpStatus(); got != tt.want {
+			if got := e.HttpResponse().Status; got != tt.want {
 				t.Errorf("NotFoundError.HttpStatus() = %v, want %v", got, tt.want)
 			}
 		})
@@ -299,7 +299,7 @@ func TestInternalError_HttpStatus(t *testing.T) {
 				Err:        tt.fields.Err,
 				Stacktrace: tt.fields.Stacktrace,
 			}
-			if got := e.HttpStatus(); got != tt.want {
+			if got := e.HttpResponse().Status; got != tt.want {
 				t.Errorf("InternalError.HttpStatus() = %v, want %v", got, tt.want)
 			}
 		})
@@ -326,7 +326,7 @@ func TestPreconditionFailedError_HttpStatus(t *testing.T) {
 				},
 				Err: tt.fields.Err,
 			}
-			if got := e.HttpStatus(); got != tt.want {
+			if got := e.HttpResponse().Status; got != tt.want {
 				t.Errorf("PreconditionFailedError.HttpStatus() = %v, want %v", got, tt.want)
 			}
 		})
@@ -353,7 +353,7 @@ func TestValidationError_HttpStatus(t *testing.T) {
 				},
 				Errors: tt.fields.Errors,
 			}
-			if got := e.HttpStatus(); got != tt.want {
+			if got := e.HttpResponse().Status; got != tt.want {
 				t.Errorf("ValidationError.HttpStatus() = %v, want %v", got, tt.want)
 			}
 		})
@@ -378,7 +378,7 @@ func TestNotImplementedError_HttpStatus(t *testing.T) {
 					Msg: tt.fields.Msg,
 				},
 			}
-			if got := e.HttpStatus(); got != tt.want {
+			if got := e.HttpResponse().Status; got != tt.want {
 				t.Errorf("NotImplementedError.HttpStatus() = %v, want %v", got, tt.want)
 			}
 		})
@@ -403,7 +403,7 @@ func TestUnauthenticatedError_HttpStatus(t *testing.T) {
 					Msg: tt.fields.Msg,
 				},
 			}
-			if got := e.HttpStatus(); got != tt.want {
+			if got := e.HttpResponse().Status; got != tt.want {
 				t.Errorf("UnauthenticatedError.HttpStatus() = %v, want %v", got, tt.want)
 			}
 		})
@@ -428,8 +428,39 @@ func TestUnauthorizedError_HttpStatus(t *testing.T) {
 					Msg: tt.fields.Msg,
 				},
 			}
-			if got := e.HttpStatus(); got != tt.want {
+			if got := e.HttpResponse().Status; got != tt.want {
 				t.Errorf("UnauthorizedError.HttpStatus() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDetails(t *testing.T) {
+	tests := []struct {
+		name string // description of this test case
+		// Named input parameters for target function.
+		err          error
+		wantErrValue error
+		wantErr      bool
+	}{
+		{
+			name:         "test validation error",
+			err:          Validation("validation error").AddError(errors.New("field is required")),
+			wantErrValue: errors.New("validation error\n\n\t - field is required"),
+			wantErr:      true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotErr := Details(tt.err)
+			if gotErr != nil {
+				if !tt.wantErr {
+					t.Errorf("Details() failed: %v", gotErr)
+				}
+				return
+			}
+			if tt.wantErr {
+				t.Fatal("Details() succeeded unexpectedly")
 			}
 		})
 	}
