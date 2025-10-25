@@ -319,6 +319,13 @@ func (e *ValidationError) Error() string {
 	return "validation error"
 }
 
+func (e *ValidationError) AsError() error {
+	if e == nil || (len(e.Errors) == 0 && e.Msg == "") {
+		return nil
+	}
+	return e
+}
+
 // HttpResponse returns http response for ValidationError.
 func (e *ValidationError) HttpResponse() HttpResponse {
 	slice := make([]string, len(e.Errors))
@@ -342,6 +349,12 @@ func (e *ValidationError) AddError(err error) *ValidationError {
 func (e *ValidationError) Is(err error) bool {
 	_, ok := err.(*ValidationError)
 	return ok
+}
+
+func (e *ValidationError) Check(ok bool, err error) {
+	if !ok {
+		e.AddError(err)
+	}
 }
 
 type NotImplementedError struct {
