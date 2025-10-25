@@ -21,5 +21,8 @@ jobs:
       with:
         go-version: '1.24'
 
+    - name: Install tools
+      run: make update-tools
+
     - name: Test
       run: make ci
