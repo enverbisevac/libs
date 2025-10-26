@@ -40,7 +40,7 @@ type HttpResponse struct {
 }
 
 func (r *HttpResponse) AsError() error {
-	errSlice := make(MarshalableErrors, len(r.Errors))
+	errSlice := make(Errors, len(r.Errors))
 	for i, v := range r.Errors {
 		errSlice[i] = errors.New(v)
 	}

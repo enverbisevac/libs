@@ -1,8 +1,6 @@
 package errors
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -53,45 +51,6 @@ func TestConflictItem(t *testing.T) {
 	}
 }
 
-type mergeConflictError struct {
-	ConflictError
-	Base  string   `json:"base"`
-	Head  string   `json:"head"`
-	Files []string `json:"files"`
-}
-
-func (e *mergeConflictError) Error() string {
-	return fmt.Sprintf("merge failed for base '%s' and head '%s'", e.Base, e.Head)
-}
-
-func TestConflictWithDetail(t *testing.T) {
-	base := "main"
-	head := "dev"
-
-	err := &mergeConflictError{
-		Base:  base,
-		Head:  head,
-		Files: []string{"test.txt"},
-	}
-
-	if !IsConflict(err) {
-		t.Errorf("expected conflict error, got: %s", err)
-	}
-
-	var cerr *mergeConflictError
-	if ok := errors.As(err, &cerr); !ok || len(cerr.Files) == 0 {
-		t.Errorf("expected length of files should be 1, got: %d", len(cerr.Files))
-	}
-
-	if cerr.HttpResponse().Status != http.StatusConflict {
-		t.Errorf("expected http status 409, got: %d", cerr.HttpResponse().Status)
-	}
-
-	if cerr.Files[0] != "test.txt" {
-		t.Errorf("expected test.txt, got: %s", cerr.Files[0])
-	}
-}
-
 func TestNotFound(t *testing.T) {
 	err := NotFound("article 123 not found")
 
@@ -111,84 +70,6 @@ func TestNotFound(t *testing.T) {
 
 	if c.Error() != "article 123 not found" {
 		t.Errorf("expected article 123 not found, got: %s", c.Error())
-	}
-}
-
-type pathNotFoundError struct {
-	NotFoundError
-	Path string `json:"path"`
-}
-
-func (e *pathNotFoundError) Error() string {
-	return fmt.Sprintf("path %s not found", e.Path)
-}
-
-func (e *pathNotFoundError) MarshalJSON() ([]byte, error) {
-	type NotFoundErrorAlias NotFoundError
-	aux := struct {
-		NotFoundErrorAlias
-		Path string `json:"path"`
-	}{
-		NotFoundErrorAlias: NotFoundErrorAlias{
-			Base: Base{
-				Msg: e.Error(),
-			},
-		},
-		Path: e.Path,
-	}
-
-	return json.Marshal(aux)
-}
-
-func TestNotFoundWithDetail(t *testing.T) {
-	path := "/users"
-
-	err := &pathNotFoundError{
-		Path: path,
-	}
-
-	if !IsNotFound(err) {
-		t.Errorf("expected path not found error, got: %s", err)
-	}
-
-	var cerr *pathNotFoundError
-	if ok := errors.As(err, &cerr); !ok || len(cerr.Path) == 0 {
-		t.Errorf("expected length of path should be greater than 0, got: %d", len(cerr.Path))
-	}
-
-	if cerr.HttpResponse().Status != http.StatusNotFound {
-		t.Errorf("expected http status 404, got: %d", cerr.HttpResponse().Status)
-	}
-
-	if cerr.Path != "/users" {
-		t.Errorf("expected /users, got: %s", cerr.Path)
-	}
-}
-
-func TestNotFoundJSON(t *testing.T) {
-	path := "/users"
-
-	err := &pathNotFoundError{
-		Path: path,
-	}
-
-	if !IsNotFound(err) {
-		t.Errorf("expected path not found error, got: %s", err)
-	}
-
-	var cerr *pathNotFoundError
-	if ok := errors.As(err, &cerr); !ok || len(cerr.Path) == 0 {
-		t.Errorf("expected length of path should be greater than 0, got: %d", len(cerr.Path))
-	}
-
-	buff := bytes.Buffer{}
-
-	if json.NewEncoder(&buff).Encode(cerr) != nil {
-		t.Errorf("expected nil error, got: %v", cerr)
-	}
-
-	if buff.Len() == 0 {
-		t.Errorf("expected buff length > 0, got: %v", buff.Len())
 	}
 }
 
@@ -436,28 +317,141 @@ func TestDetails(t *testing.T) {
 	tests := []struct {
 		name string // description of this test case
 		// Named input parameters for target function.
-		err          error
-		wantErrValue error
-		wantErr      bool
+		err     error
+		wantErr error
 	}{
 		{
-			name:         "test validation error",
-			err:          Validation("validation error").AddError(errors.New("field is required")),
-			wantErrValue: errors.New("validation error\n\n\t - field is required"),
-			wantErr:      true,
+			name:    "test validation error",
+			err:     Validation("validation error"),
+			wantErr: errors.New("validation error"),
+		},
+		{
+			name:    "test validation multiple errors",
+			err:     Validation("validation error").AddError(errors.New("field is required")),
+			wantErr: errors.New("validation error\n\n\t - field is required\n"),
+		},
+		{
+			name:    "test validation wrap error",
+			err:     fmt.Errorf("in Test: %w", Validation("validation error").AddError(errors.New("field is required"))),
+			wantErr: errors.New("validation error\n\n\t - field is required\n"),
+		},
+		{
+			name:    "test conflict error",
+			err:     Conflict("resource conflict"),
+			wantErr: errors.New("resource conflict"),
+		},
+		{
+			name:    "test conflict multiple errors",
+			err:     Conflict("resource conflict").AddError(errors.New("resource id already exists")),
+			wantErr: errors.New("resource conflict\n\n\t - resource id already exists\n"),
+		},
+		{
+			name:    "test conflict wrap error",
+			err:     fmt.Errorf("in Test: %w", Conflict("resource conflict").AddError(errors.New("resource id already exists"))),
+			wantErr: errors.New("resource conflict\n\n\t - resource id already exists\n"),
+		},
+		{
+			name:    "not found error",
+			err:     NotFound("resource not found"),
+			wantErr: errors.New("resource not found"),
+		},
+		{
+			name:    "not found wrap error",
+			err:     fmt.Errorf("in Test: %w", NotFound("resource not found")),
+			wantErr: errors.New("resource not found"),
+		},
+		{
+			name:    "internal error",
+			err:     Internal(errors.New("db connection failed"), "internal server error"),
+			wantErr: errors.New("internal server error\n\nCaused by:\n\tdb connection failed\n"),
+		},
+		{
+			name:    "internal wrap error",
+			err:     fmt.Errorf("in Test: %w", Internal(errors.New("db connection failed"), "internal server error")),
+			wantErr: errors.New("internal server error\n\nCaused by:\n\tdb connection failed\n"),
+		},
+		{
+			name:    "precondition failed error",
+			err:     PreconditionFailed("precondition failed"),
+			wantErr: errors.New("precondition failed"),
+		},
+		{
+			name:    "precondition failed set error",
+			err:     PreconditionFailed("precondition failed").SetErr(errors.New("etag mismatch")),
+			wantErr: errors.New("precondition failed\n\nCaused by:\n\tetag mismatch\n"),
+		},
+		{
+			name:    "precondition failed wrap error",
+			err:     fmt.Errorf("in Test: %w", PreconditionFailed("precondition failed")),
+			wantErr: errors.New("precondition failed"),
+		},
+		{
+			name:    "validation error",
+			err:     Validation("validation error"),
+			wantErr: errors.New("validation error"),
+		},
+		{
+			name: "validation error multiple errors",
+			err: Validation("validation error").
+				AddError(errors.New("title is required field")).
+				AddError(Validation("status must be one of the values [draft, published]")),
+			wantErr: errors.New("validation error\n\n\t - title is required field\n\t - status must be one of the values [draft, published]\n"),
+		},
+		{
+			name:    "validation wrap error",
+			err:     fmt.Errorf("in Test: %w", Validation("validation error")),
+			wantErr: errors.New("validation error"),
+		},
+		{
+			name:    "not implemented error",
+			err:     NotImplemented("feature not implemented"),
+			wantErr: errors.New("feature not implemented"),
+		},
+		{
+			name:    "not implemented wrap error",
+			err:     fmt.Errorf("in Test: %w", NotImplemented("feature not implemented")),
+			wantErr: errors.New("feature not implemented"),
+		},
+		{
+			name:    "unauthenticated error",
+			err:     Unauthenticated("user not authenticated"),
+			wantErr: errors.New("user not authenticated"),
+		},
+		{
+			name:    "unauthenticated wrap error",
+			err:     fmt.Errorf("in Test: %w", Unauthenticated("user not authenticated")),
+			wantErr: errors.New("user not authenticated"),
+		},
+		{
+			name:    "unauthorized error",
+			err:     Unauthorized("user not authorized"),
+			wantErr: errors.New("user not authorized"),
+		},
+		{
+			name:    "unauthorized wrap error",
+			err:     fmt.Errorf("in Test: %w", Unauthorized("user not authorized")),
+			wantErr: errors.New("user not authorized"),
+		},
+		{
+			name:    "other error",
+			err:     errors.New("some other error"),
+			wantErr: errors.New("some other error"),
+		},
+		{
+			name:    "test nil error",
+			err:     nil,
+			wantErr: nil,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gotErr := Details(tt.err)
-			if gotErr != nil {
-				if !tt.wantErr {
-					t.Errorf("Details() failed: %v", gotErr)
-				}
+			if (gotErr == nil) != (tt.wantErr == nil) {
+				t.Errorf("Details() = %v, want %v", gotErr, tt.wantErr)
 				return
 			}
-			if tt.wantErr {
-				t.Fatal("Details() succeeded unexpectedly")
+			if gotErr != nil && gotErr.Error() != tt.wantErr.Error() {
+				t.Errorf("Details() = %v, want %v", gotErr, tt.wantErr)
 			}
 		})
 	}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"reflect"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -37,6 +38,10 @@ func (b *Base) SetTraceID(id string) {
 	b.TraceID = id
 }
 
+func (b *Base) IsEqual(other Base) bool {
+	return b.Msg == other.Msg && b.StatusCode == other.StatusCode
+}
+
 type tracer interface {
 	SetTraceID(id string)
 	Error() string
@@ -55,8 +60,8 @@ func TraceID(id string, t error) error {
 type ConflictError struct {
 	Base
 	// Item is a conflicting resource.
-	Item   any               `json:"item,omitempty"`
-	Errors MarshalableErrors `json:"errors"`
+	Item   any    `json:"item,omitempty"`
+	Errors Errors `json:"errors"`
 }
 
 // Conflict is a helper function to return an ConflictError.
@@ -76,21 +81,6 @@ func Conflict(format string, args ...any) *ConflictError {
 	}
 }
 
-// IsConflict checks if err is conflict error.
-func IsConflict(err error) bool {
-	return errors.Is(err, &ConflictError{})
-}
-
-// AsConflict return err as ConflictError or nil if it is not
-// successfull.
-func AsConflict(err error) (cerr *ConflictError, b bool) {
-	if errors.As(err, &cerr) {
-		return cerr, true
-	}
-
-	return nil, false
-}
-
 // Error interface method.
 func (e *ConflictError) Error() string {
 	if e.Msg != "" {
@@ -103,11 +93,14 @@ func (e *ConflictError) Error() string {
 }
 
 func (e *ConflictError) ErrorDetails() string {
+	if len(e.Errors) == 0 {
+		return e.Error()
+	}
 	sb := strings.Builder{}
 	sb.WriteString(e.Error())
 	sb.WriteString("\n\n")
 	for _, err := range e.Errors {
-		sb.WriteString("\t" + err.Error())
+		sb.WriteString("\t - " + err.Error())
 		sb.WriteString("\n")
 	}
 
@@ -135,8 +128,27 @@ func (e *ConflictError) AddError(err error) *ConflictError {
 }
 
 // Is checks if err is ConflictError.
-func (e *ConflictError) Is(t error) bool {
-	_, ok := t.(*ConflictError)
+func (e *ConflictError) Is(err error) bool {
+	ce, ok := err.(*ConflictError)
+	if !ok {
+		return false
+	}
+	return e.IsEqual(ce.Base) && reflect.DeepEqual(e.Item, ce.Item)
+}
+
+// AsConflict return err as ConflictError or nil if it is not
+// successfull.
+func AsConflict(err error) (cerr *ConflictError, b bool) {
+	if errors.As(err, &cerr) {
+		return cerr, true
+	}
+
+	return nil, false
+}
+
+// IsConflict checks if err is conflict error.
+func IsConflict(err error) bool {
+	_, ok := AsConflict(err)
 	return ok
 }
 
@@ -159,21 +171,6 @@ func NotFound(format string, args ...any) *NotFoundError {
 		Item: item,
 		Base: newBasef(format, args...),
 	}
-}
-
-// IsNotFound checks if err is not found error.
-func IsNotFound(err error) bool {
-	return errors.Is(err, &NotFoundError{})
-}
-
-// AsNotFound return err as NotFoundError or nil if it is not
-// successfull.
-func AsNotFound(err error) (nerr *NotFoundError, b bool) {
-	if errors.As(err, &nerr) {
-		return nerr, true
-	}
-
-	return nil, false
 }
 
 // Error interface method.
@@ -200,7 +197,27 @@ func (e *NotFoundError) HttpResponse() HttpResponse {
 }
 
 func (e *NotFoundError) Is(err error) bool {
-	_, ok := err.(*NotFoundError)
+	nfe, ok := err.(*NotFoundError)
+	if !ok {
+		return false
+	}
+	return e.IsEqual(nfe.Base) &&
+		reflect.DeepEqual(e.Item, nfe.Item)
+}
+
+// AsNotFound return err as NotFoundError or nil if it is not
+// successfull.
+func AsNotFound(err error) (nerr *NotFoundError, b bool) {
+	if errors.As(err, &nerr) {
+		return nerr, true
+	}
+
+	return nil, false
+}
+
+// IsNotFound checks if err is not found error.
+func IsNotFound(err error) bool {
+	_, ok := AsNotFound(err)
 	return ok
 }
 
@@ -219,19 +236,6 @@ func Internal(err error, format string, args ...any) *InternalError {
 	}
 }
 
-func AsInternal(err error) (ierr *InternalError, b bool) {
-	if errors.As(err, &ierr) {
-		return ierr, true
-	}
-
-	return nil, false
-}
-
-// IsInternal checks if err is internal error.
-func IsInternal(err error) bool {
-	return errors.Is(err, &InternalError{})
-}
-
 func (e *InternalError) Error() string {
 	if e.Msg != "" {
 		return e.Msg
@@ -243,6 +247,10 @@ func (e *InternalError) Error() string {
 }
 
 func (e *InternalError) ErrorDetails() string {
+	if e.Err == nil {
+		return e.Error()
+	}
+
 	sb := strings.Builder{}
 	sb.WriteString(e.Error())
 	sb.WriteString("\n\n")
@@ -250,11 +258,8 @@ func (e *InternalError) ErrorDetails() string {
 	if e.Err != nil {
 		sb.WriteString("Caused by:\n")
 		sb.WriteString("\t" + e.Err.Error())
+		sb.WriteString("\n")
 	}
-
-	sb.WriteString("\tStacktrace:\n")
-	sb.WriteString("\t")
-	sb.Write(e.Stacktrace)
 
 	return sb.String()
 }
@@ -266,6 +271,31 @@ func (e *InternalError) HttpResponse() HttpResponse {
 		Status: http.StatusInternalServerError,
 		Errors: []string{cmp.Or(e.Err, New("Internal Server Error")).Error()},
 	}
+}
+
+func (e *InternalError) Is(err error) bool {
+	ie, ok := err.(*InternalError)
+	if !ok {
+		return false
+	}
+	return e.IsEqual(ie.Base) &&
+		errors.Is(e.Err, ie.Err)
+}
+
+// AsInternal return err as InternalError or nil if it is not
+// successfull.
+func AsInternal(err error) (ierr *InternalError, b bool) {
+	if errors.As(err, &ierr) {
+		return ierr, true
+	}
+
+	return nil, false
+}
+
+// IsInternal checks if err is internal error.
+func IsInternal(err error) bool {
+	_, ok := AsInternal(err)
+	return ok
 }
 
 type PreconditionFailedError struct {
@@ -280,11 +310,6 @@ func PreconditionFailed(format string, args ...any) *PreconditionFailedError {
 	}
 }
 
-// IsInternal checks if err is internal error.
-func IsPreconditionFailed(err error) bool {
-	return errors.Is(err, &PreconditionFailedError{})
-}
-
 func (e *PreconditionFailedError) Error() string {
 	if e.Msg != "" {
 		return e.Msg
@@ -293,6 +318,9 @@ func (e *PreconditionFailedError) Error() string {
 }
 
 func (e *PreconditionFailedError) ErrorDetails() string {
+	if e.Err == nil {
+		return e.Error()
+	}
 	sb := strings.Builder{}
 	sb.WriteString(e.Error())
 	sb.WriteString("\n\n")
@@ -300,9 +328,19 @@ func (e *PreconditionFailedError) ErrorDetails() string {
 	if e.Err != nil {
 		sb.WriteString("Caused by:\n")
 		sb.WriteString("\t" + e.Err.Error())
+		sb.WriteString("\n")
 	}
 
 	return sb.String()
+}
+
+func (e *PreconditionFailedError) Is(err error) bool {
+	pe, ok := err.(*PreconditionFailedError)
+	if !ok {
+		return false
+	}
+	return e.IsEqual(pe.Base) &&
+		errors.Is(e.Err, pe.Err)
 }
 
 // HttpResponse returns http response for PreconditionFailedError.
@@ -319,30 +357,23 @@ func (e *PreconditionFailedError) SetErr(err error) *PreconditionFailedError {
 	return e
 }
 
-type MarshalableErrors []error
-
-func (me MarshalableErrors) MarshalJSON() ([]byte, error) {
-	data := []byte("[")
-	for i, err := range me {
-		if i != 0 {
-			data = append(data, ',')
-		}
-		errstr := strings.ReplaceAll(err.Error(), "\n", " or ")
-		j, err := json.Marshal(errstr)
-		if err != nil {
-			return nil, err
-		}
-
-		data = append(data, j...)
+func AsPreconditionFailed(err error) (perr *PreconditionFailedError, b bool) {
+	if errors.As(err, &perr) {
+		return perr, true
 	}
-	data = append(data, ']')
 
-	return data, nil
+	return nil, false
+}
+
+// IsInternal checks if err is internal error.
+func IsPreconditionFailed(err error) bool {
+	_, ok := AsPreconditionFailed(err)
+	return ok
 }
 
 type ValidationError struct {
 	Base
-	Errors MarshalableErrors `json:"errors,omitempty"`
+	Errors Errors `json:"errors,omitempty"`
 }
 
 // Validation is a helper function to return an invalid argument Error.
@@ -350,19 +381,6 @@ func Validation(format string, args ...any) *ValidationError {
 	return &ValidationError{
 		Base: newBasef(format, args...),
 	}
-}
-
-// IsValidation checks if err is invalid argument error.
-func IsValidation(err error) bool {
-	return errors.Is(err, &ValidationError{})
-}
-
-func AsValidation(err error) (verr *ValidationError, b bool) {
-	if errors.As(err, &verr) {
-		return verr, true
-	}
-
-	return nil, false
 }
 
 func (e *ValidationError) Error() string {
@@ -373,6 +391,9 @@ func (e *ValidationError) Error() string {
 }
 
 func (e *ValidationError) ErrorDetails() string {
+	if len(e.Errors) == 0 {
+		return e.Error()
+	}
 	sb := strings.Builder{}
 	sb.WriteString(e.Error())
 	sb.WriteString("\n\n")
@@ -413,14 +434,32 @@ func (e *ValidationError) AddError(err error) *ValidationError {
 }
 
 func (e *ValidationError) Is(err error) bool {
-	_, ok := err.(*ValidationError)
-	return ok
+	ve, ok := err.(*ValidationError)
+	if !ok {
+		return false
+	}
+	return e.IsEqual(ve.Base) &&
+		reflect.DeepEqual(e.Errors, ve.Errors)
 }
 
 func (e *ValidationError) Check(ok bool, err error) {
 	if !ok {
 		_ = e.AddError(err)
 	}
+}
+
+func AsValidation(err error) (verr *ValidationError, b bool) {
+	if errors.As(err, &verr) {
+		return verr, true
+	}
+
+	return nil, false
+}
+
+// IsValidation checks if err is invalid argument error.
+func IsValidation(err error) bool {
+	_, ok := AsValidation(err)
+	return ok
 }
 
 type NotImplementedError struct {
@@ -432,11 +471,6 @@ func NotImplemented(format string, args ...any) *NotImplementedError {
 	return &NotImplementedError{
 		Base: newBasef(format, args...),
 	}
-}
-
-// IsNotImplemented checks if err is not implemented error.
-func IsNotImplemented(err error) bool {
-	return errors.Is(err, &NotImplementedError{})
 }
 
 func (e *NotImplementedError) Error() string {
@@ -458,6 +492,28 @@ func (e *NotImplementedError) HttpResponse() HttpResponse {
 	}
 }
 
+func (e *NotImplementedError) Is(err error) bool {
+	nie, ok := err.(*NotImplementedError)
+	if !ok {
+		return false
+	}
+	return e.IsEqual(nie.Base)
+}
+
+func AsNotImplemented(err error) (nerr *NotImplementedError, b bool) {
+	if errors.As(err, &nerr) {
+		return nerr, true
+	}
+
+	return nil, false
+}
+
+// IsNotImplemented checks if err is not implemented error.
+func IsNotImplemented(err error) bool {
+	_, ok := AsNotImplemented(err)
+	return ok
+}
+
 type UnauthenticatedError struct {
 	Base
 }
@@ -466,18 +522,6 @@ func Unauthenticated(format string, args ...any) *UnauthenticatedError {
 	return &UnauthenticatedError{
 		Base: newBasef(format, args...),
 	}
-}
-
-func IsUnauthenticated(err error) bool {
-	return errors.Is(err, &UnauthenticatedError{})
-}
-
-func AsUnautenticated(err error) (verr *ValidationError, b bool) {
-	if errors.As(err, &verr) {
-		return verr, true
-	}
-
-	return nil, false
 }
 
 func (e *UnauthenticatedError) Error() string {
@@ -499,6 +543,19 @@ func (e *UnauthenticatedError) HttpResponse() HttpResponse {
 	}
 }
 
+func AsUnautenticated(err error) (verr *ValidationError, b bool) {
+	if errors.As(err, &verr) {
+		return verr, true
+	}
+
+	return nil, false
+}
+
+func IsUnauthenticated(err error) bool {
+	_, ok := AsUnautenticated(err)
+	return ok
+}
+
 type UnauthorizedError struct {
 	Base
 }
@@ -507,18 +564,6 @@ func Unauthorized(format string, args ...any) *UnauthorizedError {
 	return &UnauthorizedError{
 		Base: newBasef(format, args...),
 	}
-}
-
-func IsUnauthorized(err error) bool {
-	return errors.Is(err, &UnauthorizedError{})
-}
-
-func AsUnauthorized(err error) (verr *ValidationError, b bool) {
-	if errors.As(err, &verr) {
-		return verr, true
-	}
-
-	return nil, false
 }
 
 func (e *UnauthorizedError) Error() string {
@@ -540,11 +585,94 @@ func (e *UnauthorizedError) ErrorDetails() string {
 	return e.Error()
 }
 
-func Details(err error) error {
-	switch e := err.(type) {
-	case interface{ ErrorDetails() string }:
-		return errors.New(e.ErrorDetails())
-	default:
-		return errors.New(err.Error())
+func AsUnauthorized(err error) (verr *ValidationError, b bool) {
+	if errors.As(err, &verr) {
+		return verr, true
 	}
+
+	return nil, false
+}
+
+func IsUnauthorized(err error) bool {
+	_, ok := AsUnauthorized(err)
+	return ok
+}
+
+func Details(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	var ok bool
+
+	var ve *ValidationError
+	ok = errors.As(err, &ve)
+	if ok {
+		return errors.New(ve.ErrorDetails())
+	}
+
+	var ce *ConflictError
+	ok = errors.As(err, &ce)
+	if ok {
+		return errors.New(ce.ErrorDetails())
+	}
+
+	var ne *NotFoundError
+	ok = errors.As(err, &ne)
+	if ok {
+		return errors.New(ne.ErrorDetails())
+	}
+
+	var ie *InternalError
+	ok = errors.As(err, &ie)
+	if ok {
+		return errors.New(ie.ErrorDetails())
+	}
+
+	var nie *NotImplementedError
+	ok = errors.As(err, &nie)
+	if ok {
+		return errors.New(nie.ErrorDetails())
+	}
+
+	var pe *PreconditionFailedError
+	ok = errors.As(err, &pe)
+	if ok {
+		return errors.New(pe.ErrorDetails())
+	}
+
+	var ue *UnauthenticatedError
+	ok = errors.As(err, &ue)
+	if ok {
+		return errors.New(ue.ErrorDetails())
+	}
+
+	var aue *UnauthorizedError
+	ok = errors.As(err, &aue)
+	if ok {
+		return errors.New(aue.ErrorDetails())
+	}
+
+	return err
+}
+
+type Errors []error
+
+func (me Errors) MarshalJSON() ([]byte, error) {
+	data := []byte("[")
+	for i, err := range me {
+		if i != 0 {
+			data = append(data, ',')
+		}
+		errstr := strings.ReplaceAll(err.Error(), "\n", " or ")
+		j, err := json.Marshal(errstr)
+		if err != nil {
+			return nil, err
+		}
+
+		data = append(data, j...)
+	}
+	data = append(data, ']')
+
+	return data, nil
 }
