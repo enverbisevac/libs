@@ -1,4 +1,4 @@
-package types
+package optional
 
 import (
 	"encoding/json"
@@ -6,101 +6,106 @@ import (
 	"github.com/swaggest/jsonschema-go"
 )
 
-type Optional[T any] struct {
+type Type[T any] struct {
 	set   bool
 	null  bool
 	value T
 }
 
-func New[T any](value T) Optional[T] {
-	return Optional[T]{
+func New[T any](value T) Type[T] {
+	return Type[T]{
 		value: value,
 		set:   true,
 		null:  false,
 	}
 }
 
-func (n *Optional[T]) Set(value T) {
-	n.value = value
-	n.set = true
-	n.null = false
+func (t *Type[T]) Set(value T) {
+	t.value = value
+	t.set = true
+	t.null = false
 }
 
-func (n *Optional[T]) SetNull() {
-	n.set = true
-	n.null = true
+func (t *Type[T]) SetNull() {
+	t.set = true
+	t.null = true
 }
 
-func (n *Optional[T]) Unset() {
-	n.set = false
-	n.null = false
+func (t *Type[T]) Unset() {
+	t.set = false
+	t.null = false
 	var zero T
-	n.value = zero
+	t.value = zero
 }
 
-func (n Optional[T]) IsSet() bool { return n.set }
+func (t Type[T]) IsSet() bool { return t.set }
 
-func (n Optional[T]) IsNull() bool { return n.set && n.null }
+func (t Type[T]) IsNull() bool { return t.set && t.null }
 
-func (n Optional[T]) IsZero() bool {
-	return !n.set
+func (t Type[T]) IsZero() bool {
+	return !t.set
 }
 
-func (n Optional[T]) Value() (T, bool) {
-	return n.value, n.set && !n.null
+func (t Type[T]) Value() (T, bool) {
+	return t.value, t.set && !t.null
 }
 
-func (n Optional[T]) Ptr() *T {
-	if n.set && !n.null {
-		return &n.value
+func (t Type[T]) Ptr() *T {
+	if t.set && !t.null {
+		return &t.value
 	}
 	return nil
 }
 
-func (n Optional[T]) ValueOrDefault(defaultValue T) T {
-	if n.set && !n.null {
-		return n.value
+func (t Type[T]) ValueOrDefault(defaultValue T) T {
+	if t.set && !t.null {
+		return t.value
 	}
 	return defaultValue
 }
 
-func (n Optional[T]) MustValue() T {
-	if n.set && !n.null {
-		return n.value
+func (t Type[T]) ValueOrZero() T {
+	var zero T
+	return t.ValueOrDefault(zero)
+}
+
+func (t Type[T]) MustValue() T {
+	if t.set && !t.null {
+		return t.value
 	}
 	panic("nullable: value is not set")
 }
 
 // MarshalJSON handles JSON serialization
-func (n Optional[T]) MarshalJSON() ([]byte, error) {
-	if !n.set {
+func (t Type[T]) MarshalJSON() ([]byte, error) {
+	if !t.set {
 		return []byte("{}"), nil // Treat unset as {} in JSON
 	}
-	if n.null {
+	if t.null {
 		return []byte("null"), nil
 	}
-	return json.Marshal(n.value)
+	return json.Marshal(t.value)
 }
 
 // UnmarshalJSON handles JSON deserialization
-func (n *Optional[T]) UnmarshalJSON(data []byte) error {
+func (t *Type[T]) UnmarshalJSON(data []byte) error {
 	if string(data) == "null" {
-		n.SetNull()
+		t.SetNull()
 		return nil
 	}
 	if string(data) == "{}" {
-		n.Unset()
+		t.Unset()
 		return nil
 	}
 	var v T
 	if err := json.Unmarshal(data, &v); err != nil {
 		return err
 	}
-	n.Set(v)
+	t.Set(v)
 	return nil
 }
 
-func (n *Optional[T]) Enum() []any {
+func (*Type[T]) Enum() []any {
 	var zero T
 	c, ok := any(zero).(interface{ Enum() []any })
 	if ok {
@@ -109,7 +114,7 @@ func (n *Optional[T]) Enum() []any {
 	return nil
 }
 
-func (n *Optional[T]) JSONSchema() (jsonschema.Schema, error) {
+func (*Type[T]) JSONSchema() (jsonschema.Schema, error) {
 	var schema jsonschema.Schema
 	var zero T
 

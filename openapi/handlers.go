@@ -15,7 +15,9 @@ func (f HandleFunc1[H, S]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	encoder, _ := GetEncDec(w, r)
 
-	err := httputil.Decode(r, chi.URLParam, &header)
+	decode := httputil.NewDecoder(httputil.PathValue(chi.URLParam)).Decode
+
+	err := decode(r, &header)
 	if err != nil {
 		errors.Response(encoder, w, err)
 		return
@@ -59,7 +61,9 @@ func (f HandleFunc2[H, B, S]) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 
 	encoder, _ := GetEncDec(w, r)
 
-	err := httputil.Decode(r, chi.URLParam, &header)
+	decode := httputil.NewDecoder(httputil.PathValue(chi.URLParam)).Decode
+
+	err := decode(r, &header)
 	if err != nil {
 		errors.Response(encoder, w, err)
 		return
@@ -160,7 +164,9 @@ func (f HandleFunc4[H, V, R]) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 
 	encoder, _ := GetEncDec(w, r)
 
-	err := httputil.Decode(r, chi.URLParam, &header)
+	decode := httputil.NewDecoder(httputil.PathValue(chi.URLParam)).Decode
+
+	err := decode(r, &header)
 	if err != nil {
 		errors.Response(encoder, w, err)
 		return

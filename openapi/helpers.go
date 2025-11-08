@@ -79,8 +79,10 @@ func DecodeRequest(r *http.Request, decoder Decoder, body any, args ...any) erro
 		return err
 	}
 
+	decode := httputil.NewDecoder(httputil.PathValue(chi.URLParam)).Decode
+
 	for i := range args {
-		err = httputil.Decode(r, chi.URLParam, args[i])
+		err = decode(r, args[i])
 		if err != nil {
 			return err
 		}

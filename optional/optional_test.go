@@ -1,15 +1,15 @@
-package types_test
+package optional_test
 
 import (
 	"encoding/json"
 	"testing"
 
-	"github.com/enverbisevac/libs/types"
+	"github.com/enverbisevac/libs/optional"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestNullable_SetAndGet(t *testing.T) {
-	var n types.Optional[int]
+	var n optional.Type[int]
 	assert.False(t, n.IsSet())
 	assert.False(t, n.IsNull())
 
@@ -22,7 +22,7 @@ func TestNullable_SetAndGet(t *testing.T) {
 }
 
 func TestNullable_SetNull(t *testing.T) {
-	var n types.Optional[string]
+	var n optional.Type[string]
 	n.SetNull()
 
 	assert.True(t, n.IsSet())
@@ -34,7 +34,7 @@ func TestNullable_SetNull(t *testing.T) {
 }
 
 func TestNullable_Unset(t *testing.T) {
-	var n types.Optional[float64]
+	var n optional.Type[float64]
 	n.Set(3.14)
 	n.Unset()
 
@@ -47,7 +47,7 @@ func TestNullable_Unset(t *testing.T) {
 }
 
 func TestNullable_MarshalJSON_Value(t *testing.T) {
-	var n types.Optional[int]
+	var n optional.Type[int]
 	n.Set(100)
 
 	data, err := json.Marshal(n)
@@ -56,7 +56,7 @@ func TestNullable_MarshalJSON_Value(t *testing.T) {
 }
 
 func TestNullable_MarshalJSON_Null(t *testing.T) {
-	var n types.Optional[string]
+	var n optional.Type[string]
 	n.SetNull()
 
 	data, err := json.Marshal(n)
@@ -65,7 +65,7 @@ func TestNullable_MarshalJSON_Null(t *testing.T) {
 }
 
 func TestNullable_UnmarshalJSON_Value(t *testing.T) {
-	var n types.Optional[int]
+	var n optional.Type[int]
 	err := json.Unmarshal([]byte("123"), &n)
 	assert.NoError(t, err)
 
@@ -75,7 +75,7 @@ func TestNullable_UnmarshalJSON_Value(t *testing.T) {
 }
 
 func TestNullable_UnmarshalJSON_Null(t *testing.T) {
-	var n types.Optional[string]
+	var n optional.Type[string]
 	err := json.Unmarshal([]byte("null"), &n)
 	assert.NoError(t, err)
 
