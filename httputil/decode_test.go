@@ -579,6 +579,90 @@ func TestDecodeImplodeLastValue(t *testing.T) {
 	}
 }
 
+func TestDecodeQueryEmptyValue(t *testing.T) {
+	t.Parallel()
+
+	// read the last value when expected imploded query, but received exploded
+
+	var req struct {
+		Value string `query:"value"`
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/?value=", nil)
+
+	err := Decode(r, &req)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if req.Value != "" {
+		t.Errorf(`want "last", got "%s"`, req.Value)
+	}
+}
+
+func TestDecodeQueryEmptyBoolPtrValue(t *testing.T) {
+	t.Parallel()
+
+	// read the last value when expected imploded query, but received exploded
+
+	var req struct {
+		Value *bool `query:"value"`
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/?value=", nil)
+
+	err := Decode(r, &req)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if req.Value != nil {
+		t.Errorf(`want "last", got "%v"`, req.Value)
+	}
+}
+
+func TestDecodeQueryEmptyBoolValue(t *testing.T) {
+	t.Parallel()
+
+	// read the last value when expected imploded query, but received exploded
+
+	var req struct {
+		Value bool `query:"value"`
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/?value=", nil)
+
+	err := Decode(r, &req)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if req.Value != false {
+		t.Errorf(`want "last", got "%v"`, req.Value)
+	}
+}
+
+func TestDecodeQueryEmptyIntValue(t *testing.T) {
+	t.Parallel()
+
+	// read the last value when expected imploded query, but received exploded
+
+	var req struct {
+		Value int `query:"value"`
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/?value=", nil)
+
+	err := Decode(r, &req)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if req.Value != 0 {
+		t.Errorf(`want "last", got "%v"`, req.Value)
+	}
+}
+
 func BenchmarkDecode(b *testing.B) {
 	var err error
 

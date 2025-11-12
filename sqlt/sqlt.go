@@ -59,6 +59,13 @@ func ExecuteTemplate(name string, data any) (string, []any, error) {
 
 	t.Funcs(template.FuncMap{
 		"bind": func(value any) (string, error) {
+			_, ok := value.([]byte)
+			if ok {
+				paramCount++
+				args = append(args, value)
+				return fmt.Sprintf("$%d", paramCount), nil
+			}
+
 			arr, ok := convertToAnySlice(value)
 			if ok {
 				if len(arr) == 0 {
@@ -72,6 +79,7 @@ func ExecuteTemplate(name string, data any) (string, []any, error) {
 				}
 				return strings.Join(placeholders, ", "), nil
 			}
+
 			paramCount++
 			args = append(args, value)
 			return fmt.Sprintf("$%d", paramCount), nil

@@ -1,4 +1,4 @@
-// Package request simplifies the decoding of HTTP requests (REST API) into Go structs for easier consumption.
+// Package httputil simplifies the decoding of HTTP requests (REST API) into Go structs for easier consumption.
 // It implements decoding based on the [OpenAPI 3.1] specification.
 //
 // In general, it is better to use code generation from the API specification,
@@ -589,8 +589,13 @@ func setValue(rv reflect.Value, values []string) error {
 		return nil
 	}
 
+	value := values[0]
+
 	for rv.Kind() == reflect.Pointer {
 		if rv.IsNil() {
+			if value == "" {
+				return nil
+			}
 			rv.Set(reflect.New(rv.Type().Elem()))
 		}
 
@@ -600,8 +605,6 @@ func setValue(rv reflect.Value, values []string) error {
 	const bitsPerByte = 8
 
 	bitSize := func() int { return int(rv.Type().Size()) * bitsPerByte }
-
-	value := values[0]
 
 	if e, ok := rv.Addr().Interface().(encoding.TextUnmarshaler); ok {
 		err := e.UnmarshalText([]byte(value))
@@ -616,6 +619,9 @@ func setValue(rv reflect.Value, values []string) error {
 	default:
 		return fmt.Errorf("unknown type: %s", kind)
 	case reflect.Bool:
+		if value == "" {
+			return nil
+		}
 		v, err := strconv.ParseBool(value)
 		if err != nil {
 			return err //nolint:wrapcheck
@@ -625,6 +631,9 @@ func setValue(rv reflect.Value, values []string) error {
 	case reflect.String:
 		rv.SetString(value)
 	case reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uint:
+		if value == "" {
+			return nil
+		}
 		v, err := strconv.ParseUint(value, 10, bitSize())
 		if err != nil {
 			return err //nolint:wrapcheck
@@ -632,6 +641,9 @@ func setValue(rv reflect.Value, values []string) error {
 
 		rv.SetUint(v)
 	case reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Int:
+		if value == "" {
+			return nil
+		}
 		v, err := strconv.ParseInt(value, 10, bitSize())
 		if err != nil {
 			return err //nolint:wrapcheck
@@ -639,6 +651,9 @@ func setValue(rv reflect.Value, values []string) error {
 
 		rv.SetInt(v)
 	case reflect.Float32, reflect.Float64:
+		if value == "" {
+			return nil
+		}
 		v, err := strconv.ParseFloat(value, bitSize())
 		if err != nil {
 			return err //nolint:wrapcheck
@@ -646,6 +661,9 @@ func setValue(rv reflect.Value, values []string) error {
 
 		rv.SetFloat(v)
 	case reflect.Complex64, reflect.Complex128:
+		if value == "" {
+			return nil
+		}
 		v, err := strconv.ParseComplex(value, bitSize())
 		if err != nil {
 			return err //nolint:wrapcheck
