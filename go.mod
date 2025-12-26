@@ -3,7 +3,7 @@ module github.com/enverbisevac/libs
 go 1.24
 
 require (
-	github.com/redis/go-redis/v9 v9.4.0
+	github.com/redis/go-redis/v9 v9.7.3
 	github.com/smartystreets/goconvey v1.8.1
 	github.com/swaggest/jsonschema-go v0.3.72
 	golang.org/x/exp v0.0.0-20230801115018-d63ba01acd4b
@@ -22,7 +22,7 @@ require (
 )
 
 require (
-	github.com/go-chi/chi/v5 v5.1.0
+	github.com/go-chi/chi/v5 v5.2.2
 	github.com/go-logr/logr v1.4.1
 	github.com/gopherjs/gopherjs v1.17.2 // indirect
 	github.com/jtolds/gls v4.20.0+incompatible // indirect
