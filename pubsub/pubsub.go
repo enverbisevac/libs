@@ -8,7 +8,7 @@ type Msg struct {
 }
 
 type Publisher interface {
-	// Publish topic to message broker with payload.
+	// Publish a topic to message broker with payload.
 	Publish(ctx context.Context, topic string, payload []byte,
 		options ...PublishOption) error
 }
@@ -24,4 +24,9 @@ type Subscriber interface {
 		handler func(payload *Msg) error, options ...SubscribeOption) Consumer
 	SubscribeChan(ctx context.Context, topic string,
 		options ...SubscribeOption) (Consumer, <-chan *Msg)
+}
+
+type Service interface {
+	Publisher
+	Subscriber
 }

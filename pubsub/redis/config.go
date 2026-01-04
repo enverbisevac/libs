@@ -27,14 +27,18 @@ func (f OptionFunc) Apply(config *Config) {
 // WithApp returns an option that set config app name.
 func WithApp(value string) Option {
 	return OptionFunc(func(m *Config) {
-		m.App = value
+		if value != "" {
+			m.App = value
+		}
 	})
 }
 
 // WithNamespace returns an option that set config namespace.
 func WithNamespace(value string) Option {
 	return OptionFunc(func(m *Config) {
-		m.Namespace = value
+		if value != "" {
+			m.Namespace = value
+		}
 	})
 }
 
@@ -92,10 +96,12 @@ func WithTopics(topics ...string) SubscribeOption {
 	})
 }
 
-// WithNamespace returns an channel option that configures namespace.
+// WithChannelNamespace returns an channel option that configures namespace.
 func WithChannelNamespace(value string) SubscribeOption {
 	return SubscribeOptionFunc(func(c *SubscribeConfig) {
-		c.namespace = value
+		if value != "" {
+			c.namespace = value
+		}
 	})
 }
 
@@ -116,7 +122,7 @@ func WithChannelSendTimeout(value time.Duration) SubscribeOption {
 	})
 }
 
-// WithChannelSize specifies the Go chan size that is used to buffer
+// WithChannelSize specifies the Go chan size used to buffer
 // incoming messages for subscriber.
 func WithChannelSize(value int) SubscribeOption {
 	return SubscribeOptionFunc(func(c *SubscribeConfig) {

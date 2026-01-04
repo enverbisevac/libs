@@ -21,8 +21,8 @@ type PubSub struct {
 // New create an instance of memory pubsub implementation.
 func New(options ...Option) *PubSub {
 	config := Config{
-		App:         "app",
-		Namespace:   "default",
+		App:         pubsub.DefaultAppName,
+		Namespace:   pubsub.DefaultNamespace,
 		SendTimeout: 10 * time.Second,
 		ChannelSize: 100,
 	}
@@ -54,7 +54,7 @@ func (ps *PubSub) subscribe(
 		f.Apply(&config)
 	}
 
-	// create subscriber and map it to the registry
+	// create a subscriber and map it to the registry
 	subscriber := &inMemorySubscriber{
 		config:  &config,
 		channel: make(chan *pubsub.Msg, ps.config.ChannelSize),
@@ -139,7 +139,7 @@ func (ps *PubSub) Publish(ctx context.Context, topic string, payload []byte, opt
 					log.V(1).Info(fmt.Sprintf("in pubsub Publish: message %v sent to topic %s", string(payload), topic))
 					return nil
 				case <-t.C:
-					// channel is full for topic (message is dropped)
+					// the channel is full for a topic (a message is dropped)
 					return fmt.Errorf("in pubsub Publish: %s topic is full for %s (message is dropped)",
 						topic, sub.config.SendTimeout)
 				}
@@ -153,11 +153,11 @@ func (ps *PubSub) Publish(ctx context.Context, topic string, payload []byte, opt
 	return nil
 }
 
-func (r *PubSub) Close(_ context.Context) error {
-	r.mutex.RLock()
-	defer r.mutex.RUnlock()
+func (ps *PubSub) Close(_ context.Context) error {
+	ps.mutex.RLock()
+	defer ps.mutex.RUnlock()
 
-	for _, subscriber := range r.registry {
+	for _, subscriber := range ps.registry {
 		if err := subscriber.Close(); err != nil {
 			return err
 		}

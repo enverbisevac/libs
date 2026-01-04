@@ -12,8 +12,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-type RedisPubSub any
-
 type PubSub struct {
 	config   Config
 	client   redis.UniversalClient
@@ -21,11 +19,11 @@ type PubSub struct {
 	registry []pubsub.Consumer
 }
 
-// NewRedis create an instance of redis PubSub implementation.
+// New create an instance of redis PubSub implementation.
 func New(client redis.UniversalClient, options ...Option) *PubSub {
 	config := Config{
-		App:            "app",
-		Namespace:      "default",
+		App:            pubsub.DefaultAppName,
+		Namespace:      pubsub.DefaultNamespace,
 		HealthInterval: 3 * time.Second,
 		SendTimeout:    60,
 		ChannelSize:    100,
@@ -63,7 +61,7 @@ func (ps *PubSub) subscribe(
 		f.Apply(&config)
 	}
 
-	// create subscriber and map it to the registry
+	// create a subscriber and map it to the registry
 	subscriber := &redisSubscriber{
 		config: &config,
 	}
@@ -121,7 +119,7 @@ func (ps *PubSub) SubscribeChan(
 	return subscriber, output
 }
 
-// Publish event topic to message broker with payload.
+// Publish an event topic to message broker with payload.
 func (ps *PubSub) Publish(ctx context.Context, topic string, payload []byte, opts ...pubsub.PublishOption) error {
 	pubConfig := pubsub.PublishConfig{
 		App:       ps.config.App,
@@ -141,8 +139,8 @@ func (ps *PubSub) Publish(ctx context.Context, topic string, payload []byte, opt
 	return nil
 }
 
-func (r *PubSub) Close(_ context.Context) error {
-	for _, subscriber := range r.registry {
+func (ps *PubSub) Close(_ context.Context) error {
+	for _, subscriber := range ps.registry {
 		err := subscriber.Close()
 		if err != nil {
 			return err

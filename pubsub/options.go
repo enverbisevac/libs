@@ -29,14 +29,18 @@ func (f PublishOptionFunc) Apply(config *PublishConfig) {
 // WithPublishApp modifies publish config app identifier.
 func WithPublishApp(value string) PublishOption {
 	return PublishOptionFunc(func(c *PublishConfig) {
-		c.App = value
+		if value != "" {
+			c.App = value
+		}
 	})
 }
 
 // WithPublishNamespace modifies publish config namespace.
 func WithPublishNamespace(value string) PublishOption {
 	return PublishOptionFunc(func(c *PublishConfig) {
-		c.Namespace = value
+		if value != "" {
+			c.Namespace = value
+		}
 	})
 }
 
@@ -69,10 +73,12 @@ func WithTopics(topics ...string) SubscribeOption {
 	})
 }
 
-// WithNamespace returns an channel option that configures namespace.
+// WithChannelNamespace returns a channel option that configures namespace.
 func WithChannelNamespace(value string) SubscribeOption {
 	return SubscribeOptionFunc(func(c *SubscribeConfig) {
-		c.Namespace = value
+		if value != "" {
+			c.Namespace = value
+		}
 	})
 }
 
@@ -101,6 +107,8 @@ func WithChannelSize(value int) SubscribeOption {
 	})
 }
 
+const delimiter = "."
+
 func FormatTopic(app, ns, topic string) string {
-	return app + ":" + ns + ":" + topic
+	return app + delimiter + ns + delimiter + topic
 }

@@ -1,10 +1,12 @@
 package errors
 
+import "strings"
+
 import "strconv"
 
 func parse(format string, args ...any) (string, any) {
 	var (
-		s      string
+		s      strings.Builder
 		prev   rune
 		param  string
 		dollar bool
@@ -31,7 +33,7 @@ func parse(format string, args ...any) (string, any) {
 		// parse param
 		if dollar && lbrace && ch != '}' && ch != ' ' && ch != 0 {
 			param += string(ch)
-			s += string(ch)
+			s.WriteString(string(ch))
 			continue
 		}
 
@@ -77,7 +79,7 @@ func parse(format string, args ...any) (string, any) {
 			lbrace = false
 		}
 
-		s += string(ch)
+		s.WriteString(string(ch))
 	}
-	return s, item
+	return s.String(), item
 }
