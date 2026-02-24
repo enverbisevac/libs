@@ -155,9 +155,11 @@ func (ps *PubSub) Publish(ctx context.Context, topic string, payload []byte, opt
 
 func (ps *PubSub) Close(_ context.Context) error {
 	ps.mutex.RLock()
-	defer ps.mutex.RUnlock()
+	registry := make([]*inMemorySubscriber, len(ps.registry))
+	copy(registry, ps.registry)
+	ps.mutex.RUnlock()
 
-	for _, subscriber := range ps.registry {
+	for _, subscriber := range registry {
 		if err := subscriber.Close(); err != nil {
 			return err
 		}

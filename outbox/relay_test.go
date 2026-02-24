@@ -3,6 +3,7 @@ package outbox
 import (
 	"context"
 	"errors"
+	"maps"
 	"sync"
 	"testing"
 	"time"
@@ -95,9 +96,7 @@ func (m *mockStore) getFailed() map[string]error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	cp := make(map[string]error, len(m.failed))
-	for k, v := range m.failed {
-		cp[k] = v
-	}
+	maps.Copy(cp, m.failed)
 	return cp
 }
 
@@ -248,7 +247,7 @@ func TestRelayRespectsContext(t *testing.T) {
 
 func TestRelayBatchSize(t *testing.T) {
 	var msgs []Message
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		msgs = append(msgs, Message{
 			ID:      string(rune('a' + i)),
 			Topic:   "t",

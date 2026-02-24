@@ -98,7 +98,7 @@ func (s *Store) saveWithPool(ctx context.Context, query string, msgs []outbox.Me
 	if err != nil {
 		return fmt.Errorf("outbox: begin tx: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	for _, msg := range msgs {
 		headers, err := json.Marshal(msg.Headers)
@@ -117,7 +117,7 @@ func (s *Store) saveWithDB(ctx context.Context, query string, msgs []outbox.Mess
 	if err != nil {
 		return fmt.Errorf("outbox: begin tx: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	for _, msg := range msgs {
 		headers, err := json.Marshal(msg.Headers)
@@ -165,7 +165,7 @@ func (s *Store) fetchPendingDB(ctx context.Context, query string, limit int) ([]
 	if err != nil {
 		return nil, fmt.Errorf("outbox: fetch pending: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	return scanSQLMessages(rows)
 }
 

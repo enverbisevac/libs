@@ -246,7 +246,7 @@ func TestConcurrentAccess(t *testing.T) {
 	var counter int64
 	var wg sync.WaitGroup
 
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

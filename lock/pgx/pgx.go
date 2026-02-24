@@ -192,7 +192,7 @@ func (l *locker) acquireConn(ctx context.Context) error {
 			return nil
 		})
 		if err != nil {
-			dbConn.Close()
+			_ = dbConn.Close()
 			return err
 		}
 		l.dbConn = dbConn
@@ -209,7 +209,7 @@ func (l *locker) releaseConn() {
 		l.conn = nil
 	}
 	if l.dbConn != nil {
-		l.dbConn.Close()
+		_ = l.dbConn.Close()
 		l.dbConn = nil
 		l.conn = nil
 	}
