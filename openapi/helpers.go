@@ -24,55 +24,6 @@ func GetStatus[T Success](object *T) int {
 	return statusCode
 }
 
-func Handle(
-	handler http.Handler,
-	options ...OperationFunc,
-) *Operation {
-	cOp := Operation{
-		ID:      nameOf(handler),
-		Handler: handler,
-	}
-
-	for _, fn := range options {
-		fn(&cOp)
-	}
-
-	for _, err := range cOp.Errors {
-		resp, ok := err.(HttpResponse)
-		if ok {
-			cOp.Responses[resp.HttpResponse().Status] = err
-		}
-	}
-
-	handlers := make([]httputil.Constructor, len(cOp.handlers))
-	for i, fn := range cOp.handlers {
-		handlers[i] = httputil.Constructor(fn)
-	}
-
-	cOp.Handler = httputil.NewChain(handlers...).Then(cOp.Handler)
-
-	return &cOp
-}
-
-func EncodeResponse[T Success](w http.ResponseWriter, encoder Encoder, value any, status *T) {
-	stat, ok := any(status).(HttpStatus)
-	if ok {
-		w.WriteHeader(stat.HttpStatus())
-		if stat.HttpStatus() == http.StatusNoContent {
-			return
-		}
-	}
-
-	if value == nil {
-		return
-	}
-
-	err := encoder.Encode(value)
-	if err != nil {
-		errors.Response(encoder, w, err)
-	}
-}
-
 func DecodeRequest(r *http.Request, decoder Decoder, body any, args ...any) error {
 	err := decoder.Decode(&body)
 	if err != nil && !errors.Is(err, io.EOF) {
