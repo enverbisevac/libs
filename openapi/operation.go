@@ -59,90 +59,13 @@ func (o *Operation) OperationContext(
 	return op, nil
 }
 
-type OperationFunc func(*Operation)
-
-func WithID(id string) OperationFunc {
-	return func(o *Operation) {
-		o.ID = id
-	}
+// Meta holds all OpenAPI metadata and middleware for an operation.
+type Meta struct {
+	ID          string
+	Summary     string
+	Description string
+	Tags        []string
+	Errors      []error
+	Security    []string
+	Middleware  []func(http.Handler) http.Handler
 }
-
-func WithSummary(summary string) OperationFunc {
-	return func(o *Operation) {
-		o.Summary = summary
-	}
-}
-
-func WithDescription(description string) OperationFunc {
-	return func(o *Operation) {
-		o.Description = description
-	}
-}
-
-func WithTags(tags ...string) OperationFunc {
-	return func(o *Operation) {
-		o.Tags = tags
-	}
-}
-
-func WithErrors(errors ...error) OperationFunc {
-	return func(o *Operation) {
-		o.Errors = append(o.Errors, errors...)
-	}
-}
-
-func WithSecurity(methods ...string) OperationFunc {
-	return func(o *Operation) {
-		o.Security = append(o.Security, methods...)
-	}
-}
-
-func WithHandlers(handlers ...func(http.Handler) http.Handler) OperationFunc {
-	return func(o *Operation) {
-		o.handlers = append(o.handlers, handlers...)
-	}
-}
-
-func WithHeader(object any) OperationFunc {
-	return func(o *Operation) {
-		o.Header = object
-	}
-}
-
-func WithRequest(object any) OperationFunc {
-	return func(o *Operation) {
-		o.Request = object
-	}
-}
-
-func WithResponse(status int, object any) OperationFunc {
-	return func(o *Operation) {
-		if o.Responses == nil {
-			o.Responses = make(map[int]any)
-		}
-		o.Responses[status] = object
-	}
-}
-
-type Request[T any, V any] struct {
-	Header T
-	Body   V
-}
-
-// type HandlerFunc[T any, R Success, K, V any] interface {
-// 	HandleFunc[T, K, V, R] | HandleFunc1[T, R] | HandleFunc4[T, V, R] | HandleFunc5[T, K]
-// }
-
-// func New[T any, R Success, B, O any, H HandlerFunc[T, R, B, O]](
-// 	handler H,
-// 	options ...OperationFunc,
-// ) *Operation {
-// 	switch arg := any(handler).(type) {
-// 	case HandleFunc[T, B, O, R]:
-// 		return NewOperation(arg, options...)
-// 	case HandleFunc1[T, R]:
-// 		return NewOpNoBody(arg, options...)
-// 	default:
-// 		panic("No handler type found")
-// 	}
-// }
