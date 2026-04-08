@@ -247,9 +247,7 @@ func TestConcurrentAccess(t *testing.T) {
 	var wg sync.WaitGroup
 
 	for range 20 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 
 			lock := svc.NewLock("counter")
 			if err := lock.Lock(ctx); err != nil {
@@ -265,7 +263,7 @@ func TestConcurrentAccess(t *testing.T) {
 			if err := lock.Unlock(ctx); err != nil {
 				t.Errorf("Unlock() error = %v", err)
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
