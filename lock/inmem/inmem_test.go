@@ -195,7 +195,6 @@ func TestConcurrentAccess(t *testing.T) {
 
 	for range 100 {
 		wg.Go(func() {
-
 			lock := svc.NewLock("counter")
 			if err := lock.Lock(ctx); err != nil {
 				t.Errorf("Lock() error = %v", err)
