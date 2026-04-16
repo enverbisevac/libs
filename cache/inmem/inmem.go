@@ -11,7 +11,10 @@ import (
 
 var ErrNotFound = errors.New("key not found")
 
-var _ cache.Cache = (*Cache)(nil)
+var (
+	_ cache.Cache   = (*Cache)(nil)
+	_ cache.Claimer = (*Cache)(nil)
+)
 
 // item represents a cache item with a value and an expiration time.
 type item struct {
@@ -67,6 +70,21 @@ func (c *Cache) Set(key string, value any, ttl time.Duration) error {
 		expiry: time.Now().Add(ttl),
 	}
 	return nil
+}
+
+func (c *Cache) Add(key string, value any, ttl time.Duration) (bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if existing, found := c.items[key]; found && !existing.isExpired() {
+		return false, nil
+	}
+
+	c.items[key] = item{
+		value:  value,
+		expiry: time.Now().Add(ttl),
+	}
+	return true, nil
 }
 
 // Get retrieves the value associated with the given key from the cache.

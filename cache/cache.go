@@ -3,11 +3,24 @@ package cache
 import "time"
 
 type Cache interface {
+	Claimer
 	Set(key string, value any, ttl time.Duration) error
 	Get(key string) (any, error)
 	Remove(key ...string) error
 	Pop(key string) (any, error)
 	Keys(prefix string) []string
+}
+
+// Claimer is an optional capability for caches that can perform atomic
+// set-if-absent. Backends that cannot provide this guarantee should not
+// implement it.
+//
+// Add inserts key→value only if the key is absent or expired. It returns
+// true if this caller won the claim, false if another caller already
+// holds an unexpired entry. Use this for deduplication or leader-election
+// where a Get-then-Set sequence would race.
+type Claimer interface {
+	Add(key string, value any, ttl time.Duration) (bool, error)
 }
 
 type config struct {

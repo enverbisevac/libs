@@ -312,6 +312,78 @@ func TestCache_WithTableName(t *testing.T) {
 	assert.Equal(t, "value", val)
 }
 
+func TestCache_Add(t *testing.T) {
+	c := newTestCache(t)
+
+	t.Run("first caller wins", func(t *testing.T) {
+		won, err := c.Add("claim1", "alice", time.Hour)
+		require.NoError(t, err)
+		assert.True(t, won)
+
+		val, err := c.Get("claim1")
+		require.NoError(t, err)
+		assert.Equal(t, "alice", val)
+	})
+
+	t.Run("second caller loses", func(t *testing.T) {
+		won, err := c.Add("claim2", "alice", time.Hour)
+		require.NoError(t, err)
+		assert.True(t, won)
+
+		won, err = c.Add("claim2", "bob", time.Hour)
+		require.NoError(t, err)
+		assert.False(t, won)
+
+		// Value stays with the winner.
+		val, err := c.Get("claim2")
+		require.NoError(t, err)
+		assert.Equal(t, "alice", val)
+	})
+
+	t.Run("reclaim after expiry", func(t *testing.T) {
+		won, err := c.Add("claim3", "alice", 50*time.Millisecond)
+		require.NoError(t, err)
+		assert.True(t, won)
+
+		time.Sleep(100 * time.Millisecond)
+
+		won, err = c.Add("claim3", "bob", time.Hour)
+		require.NoError(t, err)
+		assert.True(t, won)
+
+		val, err := c.Get("claim3")
+		require.NoError(t, err)
+		assert.Equal(t, "bob", val)
+	})
+
+	t.Run("concurrent claim — exactly one winner", func(t *testing.T) {
+		const contenders = 20
+		results := make(chan bool, contenders)
+		start := make(chan struct{})
+
+		for i := range contenders {
+			go func(id int) {
+				<-start
+				won, err := c.Add("claim_race", id, time.Hour)
+				if err != nil {
+					t.Errorf("Add failed: %v", err)
+				}
+				results <- won
+			}(i)
+		}
+
+		close(start)
+
+		winners := 0
+		for range contenders {
+			if <-results {
+				winners++
+			}
+		}
+		assert.Equal(t, 1, winners, "expected exactly one winner, got %d", winners)
+	})
+}
+
 func TestCache_ConcurrentAccess(t *testing.T) {
 	c := newTestCache(t)
 
@@ -320,9 +392,9 @@ func TestCache_ConcurrentAccess(t *testing.T) {
 
 	done := make(chan bool, goroutines)
 
-	for i := 0; i < goroutines; i++ {
+	for i := range goroutines {
 		go func(id int) {
-			for j := 0; j < operations; j++ {
+			for j := range operations {
 				key := "concurrent:" + string(rune('A'+id)) + ":" + string(rune('0'+j%10))
 
 				_ = c.Set(key, j, time.Hour)
@@ -333,7 +405,7 @@ func TestCache_ConcurrentAccess(t *testing.T) {
 		}(i)
 	}
 
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		<-done
 	}
 }

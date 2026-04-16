@@ -24,7 +24,10 @@ var (
 	DefaultTableName        = "cache_entries"
 )
 
-var _ cache.Cache = (*Cache)(nil)
+var (
+	_ cache.Cache   = (*Cache)(nil)
+	_ cache.Claimer = (*Cache)(nil)
+)
 
 // pgxRowsAdapter wraps pgx.Rows to implement sqlutil.Rows interface
 type pgxRowsAdapter struct {
@@ -198,6 +201,37 @@ func (c *Cache) Set(key string, value any, ttl time.Duration) error {
 		ON CONFLICT (key) DO UPDATE SET value = $2, expiry = $3`
 
 	return c.exec(ctx, query, key, buf.Bytes(), time.Now().Add(ttl))
+}
+
+func (c *Cache) Add(key string, value any, ttl time.Duration) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultOperationTimeout)
+	defer cancel()
+
+	var buf bytes.Buffer
+	if err := gob.NewEncoder(&buf).Encode(&value); err != nil {
+		return false, err
+	}
+
+	// Insert if absent; reclaim if the existing row has already expired.
+	// When the existing row is still live, the ON CONFLICT WHERE clause
+	// is false and RETURNING produces no row — sql.ErrNoRows signals
+	// "claim lost".
+	query := `INSERT INTO ` + c.tableName + ` (key, value, expiry)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (key) DO UPDATE
+			SET value = EXCLUDED.value, expiry = EXCLUDED.expiry
+			WHERE ` + c.tableName + `.expiry <= NOW()
+		RETURNING 1`
+
+	var dummy int
+	err := c.queryRow(ctx, query, key, buf.Bytes(), time.Now().Add(ttl)).Scan(&dummy)
+	if err != nil {
+		if isNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 func (c *Cache) Get(key string) (any, error) {

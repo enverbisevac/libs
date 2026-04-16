@@ -10,7 +10,10 @@ import (
 
 var DefaultOperationTimeout = 10 * time.Second
 
-var _ cache.Cache = (*Cache)(nil)
+var (
+	_ cache.Cache   = (*Cache)(nil)
+	_ cache.Claimer = (*Cache)(nil)
+)
 
 type Cache struct {
 	client redis.UniversalClient
@@ -27,6 +30,13 @@ func (c *Cache) Set(key string, value any, duration time.Duration) error {
 	defer cancel()
 
 	return c.client.Set(ctx, key, value, duration).Err()
+}
+
+func (c *Cache) Add(key string, value any, duration time.Duration) (bool, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultOperationTimeout)
+	defer cancel()
+
+	return c.client.SetNX(ctx, key, value, duration).Result()
 }
 
 func (c *Cache) Get(key string) (any, error) {
