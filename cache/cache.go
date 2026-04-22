@@ -1,14 +1,21 @@
 package cache
 
-import "time"
+import (
+	"errors"
+	"time"
+)
 
-type Cache interface {
-	Claimer
-	Set(key string, value any, ttl time.Duration) error
-	Get(key string) (any, error)
-	Remove(key ...string) error
-	Pop(key string) (any, error)
-	Keys(prefix string) []string
+// ErrNotFound is returned by backends when a key is missing or expired.
+// Backends may alias this or wrap it; callers should check with errors.Is.
+var ErrNotFound = errors.New("key not found")
+
+type Cache[K ~string, V any] interface {
+	Claimer[K, V]
+	Set(key K, value V, ttl time.Duration) error
+	Get(key K) (V, error)
+	Remove(key ...K) error
+	Pop(key K) (V, error)
+	Keys(prefix K) []K
 }
 
 // Claimer is an optional capability for caches that can perform atomic
@@ -19,8 +26,8 @@ type Cache interface {
 // true if this caller won the claim, false if another caller already
 // holds an unexpired entry. Use this for deduplication or leader-election
 // where a Get-then-Set sequence would race.
-type Claimer interface {
-	Add(key string, value any, ttl time.Duration) (bool, error)
+type Claimer[K ~string, V any] interface {
+	Add(key K, value V, ttl time.Duration) (bool, error)
 }
 
 type config struct {
@@ -51,9 +58,14 @@ func AsyncSetter(value bool) CacheConfigFunc {
 	}
 }
 
-func Get[T any](cache Cache, key string, fetcher func() (T, error), options ...CacheConfigFunc) (T, error) {
+func Get[K ~string, V any](
+	cache Cache[K, V],
+	key K,
+	fetcher func() (V, error),
+	options ...CacheConfigFunc,
+) (V, error) {
 	var (
-		zero T
+		zero V
 		c    config
 	)
 
@@ -65,11 +77,10 @@ func Get[T any](cache Cache, key string, fetcher func() (T, error), options ...C
 		c.TTL = DefaultTTL
 	}
 
-	if value, err := cache.Get(key); err == nil && value != nil {
-		output, ok := value.(T)
-		if ok {
-			return output, nil
-		}
+	if value, err := cache.Get(key); err == nil {
+		return value, nil
+	} else if !errors.Is(err, ErrNotFound) {
+		return zero, err
 	}
 
 	output, err := fetcher()
@@ -78,8 +89,7 @@ func Get[T any](cache Cache, key string, fetcher func() (T, error), options ...C
 	}
 
 	setter := func() {
-		err = cache.Set(key, output, c.TTL)
-		if err != nil {
+		if err := cache.Set(key, output, c.TTL); err != nil && c.OnSetterError != nil {
 			c.OnSetterError(err)
 		}
 	}
