@@ -37,22 +37,21 @@ func getTestPool(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
-func newTestCache(t *testing.T, opts ...pgx.Option) *pgx.Cache {
+func newTestCache[V any](t *testing.T, opts ...pgx.Option[string, V]) *pgx.Cache[string, V] {
 	t.Helper()
 
 	pool := getTestPool(t)
 	ctx := context.Background()
 
-	// Use a unique table name for test isolation
-	tableName := "test_cache_" + time.Now().Format("20060102150405")
-	opts = append([]pgx.Option{pgx.WithTableName(tableName)}, opts...)
+	// Use a unique table name for test isolation.
+	tableName := "test_cache_" + time.Now().Format("20060102150405.000000")
+	opts = append([]pgx.Option[string, V]{pgx.WithTableName[string, V](tableName)}, opts...)
 
 	c, err := pgx.New(ctx, pool, opts...)
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
 		_ = c.Close()
-		// Clean up test table
 		_, _ = pool.Exec(ctx, "DROP TABLE IF EXISTS "+tableName)
 	})
 
@@ -60,10 +59,10 @@ func newTestCache(t *testing.T, opts ...pgx.Option) *pgx.Cache {
 }
 
 // Compile-time interface check
-var _ cache.Cache = (*pgx.Cache)(nil)
+var _ cache.Cache[string, any] = (*pgx.Cache[string, any])(nil)
 
 func TestCache_SetAndGet(t *testing.T) {
-	c := newTestCache(t)
+	c := newTestCache[any](t)
 	ctx := context.Background()
 	_ = ctx
 
@@ -114,15 +113,15 @@ func TestCache_SetAndGet(t *testing.T) {
 }
 
 func TestCache_Get_NotFound(t *testing.T) {
-	c := newTestCache(t)
+	c := newTestCache[string](t)
 
 	val, err := c.Get("nonexistent")
 	assert.ErrorIs(t, err, pgx.ErrNotFound)
-	assert.Nil(t, val)
+	assert.Empty(t, val)
 }
 
 func TestCache_Get_Expired(t *testing.T) {
-	c := newTestCache(t)
+	c := newTestCache[string](t)
 
 	// Set with very short TTL
 	err := c.Set("expiring", "value", 50*time.Millisecond)
@@ -139,11 +138,11 @@ func TestCache_Get_Expired(t *testing.T) {
 	// Should be expired now
 	val, err = c.Get("expiring")
 	assert.ErrorIs(t, err, pgx.ErrNotFound)
-	assert.Nil(t, val)
+	assert.Empty(t, val)
 }
 
 func TestCache_Remove(t *testing.T) {
-	c := newTestCache(t)
+	c := newTestCache[string](t)
 
 	t.Run("single key", func(t *testing.T) {
 		err := c.Set("remove1", "value", time.Hour)
@@ -183,7 +182,7 @@ func TestCache_Remove(t *testing.T) {
 }
 
 func TestCache_Pop(t *testing.T) {
-	c := newTestCache(t)
+	c := newTestCache[string](t)
 
 	t.Run("existing key", func(t *testing.T) {
 		err := c.Set("pop1", "popvalue", time.Hour)
@@ -201,7 +200,7 @@ func TestCache_Pop(t *testing.T) {
 	t.Run("nonexistent key", func(t *testing.T) {
 		val, err := c.Pop("nonexistent")
 		assert.ErrorIs(t, err, pgx.ErrNotFound)
-		assert.Nil(t, val)
+		assert.Empty(t, val)
 	})
 
 	t.Run("expired key", func(t *testing.T) {
@@ -212,12 +211,12 @@ func TestCache_Pop(t *testing.T) {
 
 		val, err := c.Pop("pop_expired")
 		assert.ErrorIs(t, err, pgx.ErrNotFound)
-		assert.Nil(t, val)
+		assert.Empty(t, val)
 	})
 }
 
 func TestCache_Keys(t *testing.T) {
-	c := newTestCache(t)
+	c := newTestCache[string](t)
 
 	// Set up test data
 	require.NoError(t, c.Set("user:1", "alice", time.Hour))
@@ -267,7 +266,7 @@ func TestCache_Keys(t *testing.T) {
 }
 
 func TestCache_Close(t *testing.T) {
-	c := newTestCache(t)
+	c := newTestCache[any](t)
 
 	// Should not panic or error
 	err := c.Close()
@@ -284,7 +283,7 @@ func TestCache_WithTableName(t *testing.T) {
 
 	customTable := "custom_cache_table_test"
 
-	c, err := pgx.New(ctx, pool, pgx.WithTableName(customTable))
+	c, err := pgx.New(ctx, pool, pgx.WithTableName[string, string](customTable))
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -313,7 +312,7 @@ func TestCache_WithTableName(t *testing.T) {
 }
 
 func TestCache_Add(t *testing.T) {
-	c := newTestCache(t)
+	c := newTestCache[any](t)
 
 	t.Run("first caller wins", func(t *testing.T) {
 		won, err := c.Add("claim1", "alice", time.Hour)
@@ -385,7 +384,7 @@ func TestCache_Add(t *testing.T) {
 }
 
 func TestCache_ConcurrentAccess(t *testing.T) {
-	c := newTestCache(t)
+	c := newTestCache[int](t)
 
 	const goroutines = 10
 	const operations = 100
@@ -411,10 +410,9 @@ func TestCache_ConcurrentAccess(t *testing.T) {
 }
 
 func TestCache_LargeValue(t *testing.T) {
-	c := newTestCache(t)
+	c := newTestCache[[]byte](t)
 
-	// Create a large slice
-	largeData := make([]byte, 1024*1024) // 1MB
+	largeData := make([]byte, 1024*1024)
 	for i := range largeData {
 		largeData[i] = byte(i % 256)
 	}
@@ -424,14 +422,11 @@ func TestCache_LargeValue(t *testing.T) {
 
 	val, err := c.Get("large")
 	require.NoError(t, err)
-
-	retrieved, ok := val.([]byte)
-	require.True(t, ok)
-	assert.Equal(t, largeData, retrieved)
+	assert.Equal(t, largeData, val)
 }
 
 func TestCache_SpecialCharactersInKey(t *testing.T) {
-	c := newTestCache(t)
+	c := newTestCache[string](t)
 
 	testCases := []string{
 		"key with spaces",
@@ -457,7 +452,7 @@ func TestCache_SpecialCharactersInKey(t *testing.T) {
 }
 
 func TestCache_NilValue(t *testing.T) {
-	c := newTestCache(t)
+	c := newTestCache[any](t)
 
 	err := c.Set("nilkey", nil, time.Hour)
 	require.NoError(t, err)
@@ -468,7 +463,7 @@ func TestCache_NilValue(t *testing.T) {
 }
 
 func TestCache_ZeroTTL(t *testing.T) {
-	c := newTestCache(t)
+	c := newTestCache[string](t)
 
 	// Zero TTL means immediately expired
 	err := c.Set("zero_ttl", "value", 0)
@@ -498,7 +493,7 @@ func TestCache_StdLib(t *testing.T) {
 	})
 
 	tableName := "test_cache_stdlib_" + time.Now().Format("20060102150405")
-	c, err := pgx.NewStdLib(ctx, db, pgx.WithTableName(tableName))
+	c, err := pgx.NewStdLib(ctx, db, pgx.WithTableName[string, string](tableName))
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		_ = c.Close()

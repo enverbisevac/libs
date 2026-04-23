@@ -1,7 +1,6 @@
 package inmem
 
 import (
-	"errors"
 	"strings"
 	"sync"
 	"time"
@@ -9,49 +8,42 @@ import (
 	"github.com/enverbisevac/libs/cache"
 )
 
-var ErrNotFound = errors.New("key not found")
+// ErrNotFound is an alias for cache.ErrNotFound so existing callers using
+// inmem.ErrNotFound keep working.
+var ErrNotFound = cache.ErrNotFound
 
 var (
-	_ cache.Cache   = (*Cache)(nil)
-	_ cache.Claimer = (*Cache)(nil)
+	_ cache.Cache[string, any]   = (*Cache[string, any])(nil)
+	_ cache.Claimer[string, any] = (*Cache[string, any])(nil)
 )
 
-// item represents a cache item with a value and an expiration time.
-type item struct {
-	value  any
+type item[V any] struct {
+	value  V
 	expiry time.Time
 }
 
-// isExpired checks if the cache item has expired.
-func (i item) isExpired() bool {
+func (i item[V]) isExpired() bool {
 	return time.Now().After(i.expiry)
 }
 
-// Cache is a generic cache implementation with support for time-to-live
-// (TTL) expiration.
-type Cache struct {
-	items map[string]item // The map storing cache items.
-	mu    sync.RWMutex    // Mutex for controlling concurrent access to the cache.
+type Cache[K ~string, V any] struct {
+	items map[K]item[V]
+	mu    sync.RWMutex
 }
 
-// NewTTL creates a new TTLCache instance and starts a goroutine to periodically
-// remove expired items every 5 seconds.
-func New() *Cache {
-	c := &Cache{
-		items: make(map[string]item),
+func New[K ~string, V any]() *Cache[K, V] {
+	c := &Cache[K, V]{
+		items: make(map[K]item[V]),
 	}
 
 	go func() {
 		for range time.Tick(5 * time.Second) {
 			c.mu.Lock()
-
-			// Iterate over the cache items and delete expired ones.
-			for key, item := range c.items {
-				if item.isExpired() {
+			for key, it := range c.items {
+				if it.isExpired() {
 					delete(c.items, key)
 				}
 			}
-
 			c.mu.Unlock()
 		}
 	}()
@@ -59,20 +51,18 @@ func New() *Cache {
 	return c
 }
 
-// Set adds a new item to the cache with the specified key, value, and
-// time-to-live (TTL).
-func (c *Cache) Set(key string, value any, ttl time.Duration) error {
+func (c *Cache[K, V]) Set(key K, value V, ttl time.Duration) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.items[key] = item{
+	c.items[key] = item[V]{
 		value:  value,
 		expiry: time.Now().Add(ttl),
 	}
 	return nil
 }
 
-func (c *Cache) Add(key string, value any, ttl time.Duration) (bool, error) {
+func (c *Cache[K, V]) Add(key K, value V, ttl time.Duration) (bool, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -80,70 +70,62 @@ func (c *Cache) Add(key string, value any, ttl time.Duration) (bool, error) {
 		return false, nil
 	}
 
-	c.items[key] = item{
+	c.items[key] = item[V]{
 		value:  value,
 		expiry: time.Now().Add(ttl),
 	}
 	return true, nil
 }
 
-// Get retrieves the value associated with the given key from the cache.
-func (c *Cache) Get(key string) (any, error) {
+func (c *Cache[K, V]) Get(key K) (V, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	item, found := c.items[key]
+	var zero V
+	it, found := c.items[key]
 	if !found {
-		// If the key is not found, return the zero value for V and false.
-		return nil, ErrNotFound
+		return zero, ErrNotFound
 	}
 
-	if item.isExpired() {
-		// If the item has expired, remove it from the cache and return the zero
-		// value for V and false.
+	if it.isExpired() {
 		delete(c.items, key)
-		return nil, ErrNotFound
+		return zero, ErrNotFound
 	}
 
-	// If the item is still valid, return its value and true.
-	return item.value, nil
+	return it.value, nil
 }
 
-// Remove removes the item with the specified key from the cache.
-func (c *Cache) Remove(keys ...string) error {
+func (c *Cache[K, V]) Remove(keys ...K) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Delete the item with the given key from the cache.
 	for _, key := range keys {
 		delete(c.items, key)
 	}
 	return nil
 }
 
-// Pop removes and returns the item with the specified key from the cache.
-func (c *Cache) Pop(key string) (any, error) {
+func (c *Cache[K, V]) Pop(key K) (V, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	item, found := c.items[key]
+	var zero V
+	it, found := c.items[key]
 	if !found {
-		// If the key is not found, return the zero value for V and false.
-		return item.value, ErrNotFound
+		return zero, ErrNotFound
 	}
 
-	// If the key is found, delete the item from the cache and return its value
-	// and true.
 	delete(c.items, key)
-	return item.value, nil
+	return it.value, nil
 }
 
-func (c *Cache) Keys(prefix string) []string {
+func (c *Cache[K, V]) Keys(prefix K) []K {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	output := make([]string, 0, len(c.items))
+
+	output := make([]K, 0, len(c.items))
 	for key := range c.items {
-		if strings.HasPrefix(key, prefix) {
+		if strings.HasPrefix(string(key), string(prefix)) {
 			output = append(output, key)
 		}
 	}
