@@ -17,7 +17,6 @@ import (
 
 	"github.com/enverbisevac/libs/outbox"
 	osql "github.com/enverbisevac/libs/outbox/sql"
-	"github.com/google/uuid"
 )
 
 var _ outbox.Store = (*Store)(nil)
@@ -26,7 +25,6 @@ var _ outbox.Store = (*Store)(nil)
 type Store struct {
 	config osql.Config
 	db     *stdsql.DB
-	newID  func() string
 }
 
 // New creates a new SQLite outbox store backed by *sql.DB.
@@ -38,9 +36,11 @@ func New(db *stdsql.DB, options ...osql.Option) *Store {
 	return &Store{
 		config: config,
 		db:     db,
-		newID:  uuid.NewString,
 	}
 }
+
+// newID generates a new message id using the configured generator.
+func (s *Store) newID() string { return s.config.IDGenerator() }
 
 // Save persists messages within the given transaction.
 // tx may be a *sql.Tx, or nil to have the Store create its own transaction.

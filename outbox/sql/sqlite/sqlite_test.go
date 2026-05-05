@@ -20,8 +20,8 @@ func TestNewDefaults(t *testing.T) {
 	if store.config.RetryAfter != 30*time.Second {
 		t.Errorf("RetryAfter = %v, want %v", store.config.RetryAfter, 30*time.Second)
 	}
-	if store.newID == nil {
-		t.Error("newID generator should be set")
+	if store.config.IDGenerator == nil {
+		t.Error("IDGenerator should default to a non-nil function")
 	}
 }
 

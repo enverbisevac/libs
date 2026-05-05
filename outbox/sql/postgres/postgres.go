@@ -34,17 +34,20 @@ func New(db *stdsql.DB, options ...osql.Option) *Store {
 	}
 }
 
+// newID generates a new message id using the configured generator.
+func (s *Store) newID() string { return s.config.IDGenerator() }
+
 // Save persists messages within the given transaction.
 // tx may be a *sql.Tx, or nil to have the Store create its own transaction.
 func (s *Store) Save(ctx context.Context, tx any, msgs ...outbox.Message) error {
 	query := fmt.Sprintf(
-		`INSERT INTO %s (topic, key, payload, headers) VALUES ($1, $2, $3, $4)`,
+		`INSERT INTO %s (id, topic, key, payload, headers) VALUES ($1, $2, $3, $4, $5)`,
 		s.config.TableName,
 	)
 
 	switch t := tx.(type) {
 	case *stdsql.Tx:
-		return execInsert(ctx, t, query, msgs)
+		return s.execInsert(ctx, t, query, msgs)
 	case nil:
 		return s.saveWithDB(ctx, query, msgs)
 	default:
@@ -59,19 +62,23 @@ func (s *Store) saveWithDB(ctx context.Context, query string, msgs []outbox.Mess
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if err := execInsert(ctx, tx, query, msgs); err != nil {
+	if err := s.execInsert(ctx, tx, query, msgs); err != nil {
 		return err
 	}
 	return tx.Commit()
 }
 
-func execInsert(ctx context.Context, tx *stdsql.Tx, query string, msgs []outbox.Message) error {
+func (s *Store) execInsert(ctx context.Context, tx *stdsql.Tx, query string, msgs []outbox.Message) error {
 	for _, msg := range msgs {
+		id := msg.ID
+		if id == "" {
+			id = s.newID()
+		}
 		headers, err := json.Marshal(msg.Headers)
 		if err != nil {
 			return fmt.Errorf("outbox: marshal headers: %w", err)
 		}
-		if _, err := tx.ExecContext(ctx, query, msg.Topic, msg.Key, msg.Payload, headers); err != nil {
+		if _, err := tx.ExecContext(ctx, query, id, msg.Topic, msg.Key, msg.Payload, headers); err != nil {
 			return fmt.Errorf("outbox: save: %w", err)
 		}
 	}
