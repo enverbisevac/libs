@@ -39,15 +39,15 @@ func (f *fakeService) Subscribe(context.Context, string, string, stream.Handler,
 
 func (f *fakeService) Close(context.Context) error { return nil }
 
-func TestNew_NilServiceReturnsNil(t *testing.T) {
-	if got := New(nil); got != nil {
-		t.Fatalf("New(nil) = %v, want nil", got)
+func TestNewPublisher_NilServiceReturnsNil(t *testing.T) {
+	if got := NewPublisher(nil); got != nil {
+		t.Fatalf("NewPublisher(nil) = %v, want nil", got)
 	}
 }
 
 func TestPublish_RestoresNamespaceAndForwardsHeaders(t *testing.T) {
 	svc := &fakeService{}
-	pub := New(svc)
+	pub := NewPublisher(svc)
 	if pub == nil {
 		t.Fatal("expected non-nil publisher")
 	}
@@ -81,7 +81,7 @@ func TestPublish_RestoresNamespaceAndForwardsHeaders(t *testing.T) {
 
 func TestPublish_MissingNamespaceHeader_StillPublishes(t *testing.T) {
 	svc := &fakeService{}
-	pub := New(svc)
+	pub := NewPublisher(svc)
 
 	err := pub.Publish(context.Background(), outbox.Message{
 		Topic:   "stream",
@@ -100,7 +100,7 @@ func TestPublish_MissingNamespaceHeader_StillPublishes(t *testing.T) {
 
 func TestPublish_PublishErrorIsWrapped(t *testing.T) {
 	svc := &fakeService{err: errors.New("broker down")}
-	pub := New(svc)
+	pub := NewPublisher(svc)
 
 	err := pub.Publish(context.Background(), outbox.Message{Topic: "topic-x", Payload: []byte("x")})
 	if err == nil {

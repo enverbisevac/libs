@@ -28,10 +28,14 @@ type Publisher struct {
 	svc stream.Producer
 }
 
-// New returns a Publisher backed by svc. Returns nil if svc is nil so
-// callers (e.g. wire providers) can pass through a missing dependency
-// without an extra branch.
-func New(svc stream.Service) outbox.Publisher {
+// NewPublisher returns a Publisher backed by svc. Returns nil if svc is
+// nil so callers (e.g. wire providers) can pass through a missing
+// dependency without an extra branch.
+//
+// For most apps prefer New (which builds a fully-wired Bundle) or the
+// per-backend NewSQLite / NewPostgres constructors. Use NewPublisher
+// directly only when you've already built your own Relay.
+func NewPublisher(svc stream.Service) outbox.Publisher {
 	if svc == nil {
 		return nil
 	}

@@ -3,28 +3,42 @@ package pgx_test
 import (
 	"context"
 	"database/sql"
-	"os"
+	"encoding/gob"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/enverbisevac/libs/cache"
 	"github.com/enverbisevac/libs/cache/pgx"
+	"github.com/enverbisevac/libs/internal/testdb"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+// testStruct is the concrete type used by the "struct value" subtest. It
+// must live at package scope and be registered with gob so decoding via
+// the V=any path can reconstruct it. Local types declared inside a subtest
+// have no stable name from gob's perspective and fail with
+// "type not registered for interface".
+type testStruct struct {
+	Name  string
+	Value int
+}
+
+func init() {
+	gob.Register(testStruct{})
+}
+
+func getTestDSN(t *testing.T) string {
+	t.Helper()
+	return testdb.Postgres(t, "PGX_TEST_DATABASE_URL")
+}
+
 func getTestPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-
-	dbURL := os.Getenv("PGX_TEST_DATABASE_URL")
-	if dbURL == "" {
-		dbURL = os.Getenv("DATABASE_URL")
-	}
-	if dbURL == "" {
-		t.Skip("Skipping test: no database URL provided. Set PGX_TEST_DATABASE_URL or DATABASE_URL environment variable.")
-	}
+	dbURL := getTestDSN(t)
 
 	ctx := context.Background()
 	pool, err := pgxpool.New(ctx, dbURL)
@@ -43,8 +57,10 @@ func newTestCache[V any](t *testing.T, opts ...pgx.Option[string, V]) *pgx.Cache
 	pool := getTestPool(t)
 	ctx := context.Background()
 
-	// Use a unique table name for test isolation.
-	tableName := "test_cache_" + time.Now().Format("20060102150405.000000")
+	// Unique table name per test invocation. UnixNano avoids the dot in
+	// fractional-second formats — Postgres parses unquoted "x.y" as
+	// schema.table and chokes when the right side starts with a digit.
+	tableName := fmt.Sprintf("test_cache_%d", time.Now().UnixNano())
 	opts = append([]pgx.Option[string, V]{pgx.WithTableName[string, V](tableName)}, opts...)
 
 	c, err := pgx.New(ctx, pool, opts...)
@@ -85,11 +101,6 @@ func TestCache_SetAndGet(t *testing.T) {
 	})
 
 	t.Run("struct value", func(t *testing.T) {
-		type testStruct struct {
-			Name  string
-			Value int
-		}
-
 		original := testStruct{Name: "test", Value: 123}
 		err := c.Set("key3", original, time.Hour)
 		require.NoError(t, err)
@@ -475,13 +486,7 @@ func TestCache_ZeroTTL(t *testing.T) {
 }
 
 func TestCache_StdLib(t *testing.T) {
-	dbURL := os.Getenv("PGX_TEST_DATABASE_URL")
-	if dbURL == "" {
-		dbURL = os.Getenv("DATABASE_URL")
-	}
-	if dbURL == "" {
-		t.Skip("Skipping test: no database URL provided. Set PGX_TEST_DATABASE_URL or DATABASE_URL environment variable.")
-	}
+	dbURL := getTestDSN(t)
 
 	ctx := context.Background()
 
