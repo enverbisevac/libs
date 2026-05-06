@@ -44,6 +44,10 @@ type Store interface {
 	// MarkFailed increments retries and records the error.
 	// Sets status to failed when max retries reached, else back to pending.
 	MarkFailed(ctx context.Context, id string, err error) error
+
+	// DeleteProcessedBefore removes messages with status 'processed' whose
+	// processed_at is strictly before t. Returns the number of rows deleted.
+	DeleteProcessedBefore(ctx context.Context, t time.Time) (int64, error)
 }
 
 // Publisher is the interface for publishing outbox messages.

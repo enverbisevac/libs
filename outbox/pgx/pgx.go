@@ -216,6 +216,31 @@ func (s *Store) MarkFailed(ctx context.Context, id string, err error) error {
 	return nil
 }
 
+// DeleteProcessedBefore removes processed messages older than t.
+func (s *Store) DeleteProcessedBefore(ctx context.Context, t time.Time) (int64, error) {
+	query := fmt.Sprintf(
+		`DELETE FROM %s WHERE status = 'processed' AND processed_at < $1`,
+		s.config.TableName,
+	)
+
+	if s.pool != nil {
+		tag, err := s.pool.Exec(ctx, query, t)
+		if err != nil {
+			return 0, fmt.Errorf("outbox: delete processed: %w", err)
+		}
+		return tag.RowsAffected(), nil
+	}
+	res, err := s.db.ExecContext(ctx, query, t)
+	if err != nil {
+		return 0, fmt.Errorf("outbox: delete processed: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("outbox: rows affected: %w", err)
+	}
+	return n, nil
+}
+
 func scanMessages(rows pgx.Rows) ([]outbox.Message, error) {
 	var msgs []outbox.Message
 	for rows.Next() {

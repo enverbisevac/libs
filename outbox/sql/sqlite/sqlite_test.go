@@ -69,7 +69,22 @@ func TestCreateTableSQLCustomName(t *testing.T) {
 	for _, want := range []string{
 		"CREATE TABLE IF NOT EXISTS my_outbox",
 		"idx_my_outbox_pending",
+		"idx_my_outbox_processed_at",
 		"ON my_outbox",
+	} {
+		if !strings.Contains(sql, want) {
+			t.Errorf("missing fragment %q", want)
+		}
+	}
+}
+
+func TestCreateTableSQLProcessedIndex(t *testing.T) {
+	sql := CreateTableSQL("outbox_messages")
+
+	for _, want := range []string{
+		"idx_outbox_messages_processed_at",
+		"(processed_at)",
+		"WHERE status = 'processed'",
 	} {
 		if !strings.Contains(sql, want) {
 			t.Errorf("missing fragment %q", want)

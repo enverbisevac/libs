@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/enverbisevac/libs/outbox"
 	osql "github.com/enverbisevac/libs/outbox/sql"
@@ -153,4 +154,21 @@ func (s *Store) MarkFailed(ctx context.Context, id string, err error) error {
 		return fmt.Errorf("outbox: mark failed: %w", execErr)
 	}
 	return nil
+}
+
+// DeleteProcessedBefore removes processed messages older than t.
+func (s *Store) DeleteProcessedBefore(ctx context.Context, t time.Time) (int64, error) {
+	query := fmt.Sprintf(
+		`DELETE FROM %s WHERE status = 'processed' AND processed_at < $1`,
+		s.config.TableName,
+	)
+	res, err := s.db.ExecContext(ctx, query, t)
+	if err != nil {
+		return 0, fmt.Errorf("outbox: delete processed: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("outbox: rows affected: %w", err)
+	}
+	return n, nil
 }

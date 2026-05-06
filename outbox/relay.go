@@ -16,14 +16,15 @@ type Relay struct {
 
 	once   sync.Once
 	cancel context.CancelFunc
-	done   chan struct{}
+	wg     sync.WaitGroup
 }
 
 // NewRelay creates a new Relay.
 func NewRelay(store Store, pub Publisher, options ...Option) *Relay {
 	config := Config{
-		PollInterval: time.Second,
-		BatchSize:    100,
+		PollInterval:    time.Second,
+		BatchSize:       100,
+		CleanupInterval: time.Hour,
 	}
 	for _, opt := range options {
 		opt.Apply(&config)
@@ -36,11 +37,16 @@ func NewRelay(store Store, pub Publisher, options ...Option) *Relay {
 }
 
 // Start begins polling for pending messages. Safe to call multiple times.
+// When Retention is set, a background cleanup goroutine is also started.
 func (r *Relay) Start(ctx context.Context) {
 	r.once.Do(func() {
 		ctx, r.cancel = context.WithCancel(ctx)
-		r.done = make(chan struct{})
+		r.wg.Add(1)
 		go r.run(ctx)
+		if r.config.Retention > 0 {
+			r.wg.Add(1)
+			go r.runCleanup(ctx)
+		}
 	})
 }
 
@@ -48,12 +54,12 @@ func (r *Relay) Start(ctx context.Context) {
 func (r *Relay) Stop() {
 	if r.cancel != nil {
 		r.cancel()
-		<-r.done
+		r.wg.Wait()
 	}
 }
 
 func (r *Relay) run(ctx context.Context) {
-	defer close(r.done)
+	defer r.wg.Done()
 
 	log := logr.FromContextOrDiscard(ctx)
 	ticker := time.NewTicker(r.config.PollInterval)
@@ -65,6 +71,26 @@ func (r *Relay) run(ctx context.Context) {
 			return
 		case <-ticker.C:
 			r.poll(ctx, log)
+		}
+	}
+}
+
+func (r *Relay) runCleanup(ctx context.Context) {
+	defer r.wg.Done()
+
+	log := logr.FromContextOrDiscard(ctx)
+	ticker := time.NewTicker(r.config.CleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			cutoff := time.Now().Add(-r.config.Retention)
+			if _, err := r.store.DeleteProcessedBefore(ctx, cutoff); err != nil {
+				log.Error(err, "outbox: cleanup")
+			}
 		}
 	}
 }

@@ -14,10 +14,14 @@ func CreateTableSQL(tableName string) string {
 	retries INTEGER NOT NULL DEFAULT 0,
 	last_error TEXT NOT NULL DEFAULT '',
 	created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-s	processed_at TIMESTAMPTZ
+	processed_at TIMESTAMPTZ
 );
 
 CREATE INDEX IF NOT EXISTS idx_%s_pending
 	ON %s (created_at)
-	WHERE status = 'pending';`, tableName, tableName, tableName)
+	WHERE status = 'pending';
+
+CREATE INDEX IF NOT EXISTS idx_%s_processed_at
+	ON %s (processed_at)
+	WHERE status = 'processed';`, tableName, tableName, tableName, tableName, tableName)
 }
