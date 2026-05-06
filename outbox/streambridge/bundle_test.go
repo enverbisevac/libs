@@ -51,6 +51,10 @@ func (f *fakeStore) MarkProcessed(_ context.Context, ids ...string) error {
 
 func (f *fakeStore) MarkFailed(context.Context, string, error) error { return nil }
 
+func (f *fakeStore) DeleteProcessedBefore(context.Context, time.Time) (int64, error) {
+	return 0, nil
+}
+
 // closableService is a thread-safe stream.Service stub for bundle tests.
 type closableService struct {
 	mu        sync.Mutex

@@ -1,3 +1,14 @@
+// Package redis provides a Redis implementation of cache.Cache.
+//
+// Values are stored gob-encoded. When the cache is parameterised with
+// V=any, decoding goes through *interface{} and gob requires the
+// concrete value type to be pre-registered:
+//
+//	gob.Register(MyStruct{})
+//
+// Without registration, Get returns "gob: type not registered for
+// interface". Caches parameterised with a concrete V (e.g.
+// Cache[string, MyStruct]) round-trip directly and need no registration.
 package redis
 
 import (

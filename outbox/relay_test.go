@@ -17,6 +17,9 @@ type mockStore struct {
 	fetchErr      error
 	markProcErr   error
 	markFailedErr error
+	deleteCalls   []time.Time
+	deleteReturn  int64
+	deleteErr     error
 }
 
 func newMockStore(msgs ...Message) *mockStore {
@@ -82,6 +85,24 @@ func (m *mockStore) MarkFailed(_ context.Context, id string, err error) error {
 		}
 	}
 	return nil
+}
+
+func (m *mockStore) DeleteProcessedBefore(_ context.Context, t time.Time) (int64, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.deleteCalls = append(m.deleteCalls, t)
+	if m.deleteErr != nil {
+		return 0, m.deleteErr
+	}
+	return m.deleteReturn, nil
+}
+
+func (m *mockStore) getDeleteCalls() []time.Time {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	cp := make([]time.Time, len(m.deleteCalls))
+	copy(cp, m.deleteCalls)
+	return cp
 }
 
 func (m *mockStore) getProcessed() []string {
@@ -272,6 +293,56 @@ func TestRelayBatchSize(t *testing.T) {
 	published := pub.published()
 	if len(published) == 0 {
 		t.Fatal("expected some published messages")
+	}
+}
+
+func TestRelayRetentionDisabledByDefault(t *testing.T) {
+	store := newMockStore()
+	pub := &mockPublisher{}
+	relay := NewRelay(store, pub,
+		WithPollInterval(10*time.Millisecond),
+	)
+
+	ctx := context.Background()
+	relay.Start(ctx)
+	time.Sleep(40 * time.Millisecond)
+	relay.Stop()
+
+	if calls := store.getDeleteCalls(); len(calls) != 0 {
+		t.Fatalf("expected no DeleteProcessedBefore calls, got %d", len(calls))
+	}
+}
+
+func TestRelayRetentionSweeps(t *testing.T) {
+	store := newMockStore()
+	pub := &mockPublisher{}
+	retention := time.Hour
+	relay := NewRelay(store, pub,
+		WithPollInterval(time.Second), // poll loop irrelevant here
+		WithRetention(retention),
+		WithCleanupInterval(15*time.Millisecond),
+	)
+
+	ctx := context.Background()
+	before := time.Now()
+	relay.Start(ctx)
+	time.Sleep(50 * time.Millisecond)
+	relay.Stop()
+	after := time.Now()
+
+	calls := store.getDeleteCalls()
+	if len(calls) == 0 {
+		t.Fatal("expected at least one DeleteProcessedBefore call")
+	}
+	for _, cutoff := range calls {
+		// Each cutoff should be roughly now-retention; bound it to the
+		// observed wall-clock window to avoid flakes.
+		if cutoff.Before(before.Add(-retention - time.Second)) {
+			t.Errorf("cutoff %v too far in the past", cutoff)
+		}
+		if cutoff.After(after.Add(-retention + time.Second)) {
+			t.Errorf("cutoff %v too recent (retention not applied)", cutoff)
+		}
 	}
 }
 
