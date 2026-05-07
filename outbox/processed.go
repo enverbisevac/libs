@@ -2,6 +2,7 @@ package outbox
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -38,10 +39,11 @@ type ProcessedStore interface {
 	// insert; false if a row already existed (treat as "skip — already
 	// done"). Concurrent inserts are absorbed via ON CONFLICT DO NOTHING.
 	//
-	// metadata may be nil. When non-nil it must be valid JSON; free-form
+	// metadata may be nil. When non-nil it must be valid JSON; the
+	// implementation validates and returns an error otherwise. Free-form
 	// so callers can attach handler-specific context (printed printer
 	// names, snapshot of config, audit trail) without further migrations.
-	MarkProcessed(ctx context.Context, db any, group, msgID string, metadata []byte) (isNew bool, err error)
+	MarkProcessed(ctx context.Context, db any, group, msgID string, metadata json.RawMessage) (isNew bool, err error)
 
 	// PurgeProcessedBefore deletes rows whose processed_at is strictly
 	// before t. Match the outbox retention so the dedup window stays at
@@ -53,18 +55,21 @@ type ProcessedStore interface {
 // rows older than retention. Run as a goroutine.
 //
 // A non-positive retention or interval disables the loop (returns
-// immediately). Errors from PurgeProcessedBefore are logged via logr and do
-// not stop the loop.
+// immediately, after logging at V(1) so misconfiguration is observable).
+// Errors from PurgeProcessedBefore are logged via logr and do not stop the
+// loop.
 func RunProcessedCleanup(
 	ctx context.Context,
 	store ProcessedStore,
 	db any,
 	retention, interval time.Duration,
 ) {
+	log := logr.FromContextOrDiscard(ctx)
 	if retention <= 0 || interval <= 0 {
+		log.V(1).Info("outbox: processed cleanup disabled",
+			"retention", retention, "interval", interval)
 		return
 	}
-	log := logr.FromContextOrDiscard(ctx)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {

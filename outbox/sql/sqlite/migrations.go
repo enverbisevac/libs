@@ -9,8 +9,12 @@ import (
 
 // Migrate creates the outbox messages table if it does not exist.
 // db can be a *sql.DB, *sql.Tx, *sql.Conn or any other type implementing
-// osql.Execer.
+// osql.Execer. tableName defaults to "outbox_messages" when empty (matches
+// sql.DefaultConfig and MigrateProcessed's symmetric default).
 func Migrate(ctx context.Context, db osql.Execer, tableName string) error {
+	if tableName == "" {
+		tableName = "outbox_messages"
+	}
 	if _, err := db.ExecContext(ctx, CreateTableSQL(tableName)); err != nil {
 		return fmt.Errorf("outbox: migrate: %w", err)
 	}

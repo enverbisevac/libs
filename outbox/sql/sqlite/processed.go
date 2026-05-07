@@ -3,11 +3,13 @@ package sqlite
 import (
 	"context"
 	stdsql "database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/enverbisevac/libs/outbox"
+	osql "github.com/enverbisevac/libs/outbox/sql"
 )
 
 // DefaultProcessedTable is the default table name used by ProcessedStore
@@ -15,21 +17,6 @@ import (
 const DefaultProcessedTable = "processed_messages"
 
 var _ outbox.ProcessedStore = (*ProcessedStore)(nil)
-
-// dbtx is the database/sql shape this backend understands. *sql.DB,
-// *sql.Tx and *sql.Conn satisfy it.
-type dbtx interface {
-	ExecContext(ctx context.Context, query string, args ...any) (stdsql.Result, error)
-	QueryRowContext(ctx context.Context, query string, args ...any) *stdsql.Row
-}
-
-func asDBTX(db any) (dbtx, error) {
-	x, ok := db.(dbtx)
-	if !ok {
-		return nil, fmt.Errorf("outbox: unsupported db type %T (want *sql.DB or *sql.Tx)", db)
-	}
-	return x, nil
-}
 
 // ProcessedStore implements outbox.ProcessedStore for SQLite.
 //
@@ -52,8 +39,10 @@ func NewProcessed(tableName string) *ProcessedStore {
 	return &ProcessedStore{table: tableName}
 }
 
+// IsProcessed implements outbox.ProcessedStore. db must satisfy
+// osql.DBTX (e.g. *sql.DB or *sql.Tx).
 func (s *ProcessedStore) IsProcessed(ctx context.Context, db any, group, msgID string) (bool, error) {
-	x, err := asDBTX(db)
+	x, err := osql.AsDBTX(db)
 	if err != nil {
 		return false, err
 	}
@@ -72,8 +61,16 @@ func (s *ProcessedStore) IsProcessed(ctx context.Context, db any, group, msgID s
 	return true, nil
 }
 
-func (s *ProcessedStore) MarkProcessed(ctx context.Context, db any, group, msgID string, metadata []byte) (bool, error) {
-	x, err := asDBTX(db)
+// MarkProcessed implements outbox.ProcessedStore. Non-empty metadata must
+// be valid JSON; invalid input is rejected before the INSERT runs.
+//
+// Validation matters for SQLite: the metadata column is TEXT (no JSON
+// affinity), so without this check garbage would be silently stored.
+func (s *ProcessedStore) MarkProcessed(ctx context.Context, db any, group, msgID string, metadata json.RawMessage) (bool, error) {
+	if len(metadata) > 0 && !json.Valid(metadata) {
+		return false, fmt.Errorf("outbox: mark processed: metadata is not valid JSON")
+	}
+	x, err := osql.AsDBTX(db)
 	if err != nil {
 		return false, err
 	}
@@ -84,7 +81,7 @@ ON CONFLICT (group_name, message_id) DO NOTHING`,
 		s.table,
 	)
 	var meta any
-	if metadata != nil {
+	if len(metadata) > 0 {
 		meta = string(metadata)
 	}
 	res, err := x.ExecContext(ctx, query, group, msgID, meta)
@@ -98,8 +95,17 @@ ON CONFLICT (group_name, message_id) DO NOTHING`,
 	return n > 0, nil
 }
 
+// PurgeProcessedBefore implements outbox.ProcessedStore.
+//
+// SQLite stores DATETIME values as TEXT, and CURRENT_TIMESTAMP renders
+// them as "YYYY-MM-DD HH:MM:SS" (UTC, space-separated, no Z). The default
+// driver binding for time.Time uses a different shape (e.g.
+// "2026-05-07T09:27:21Z"); a raw lexicographic comparison would mix the
+// two and mis-order rows around the space-vs-'T' boundary. We format the
+// cutoff to match CURRENT_TIMESTAMP's exact shape so the lex compare is
+// also a chronological compare.
 func (s *ProcessedStore) PurgeProcessedBefore(ctx context.Context, db any, t time.Time) (int64, error) {
-	x, err := asDBTX(db)
+	x, err := osql.AsDBTX(db)
 	if err != nil {
 		return 0, err
 	}
@@ -107,7 +113,8 @@ func (s *ProcessedStore) PurgeProcessedBefore(ctx context.Context, db any, t tim
 		`DELETE FROM %s WHERE processed_at < ?`,
 		s.table,
 	)
-	res, err := x.ExecContext(ctx, query, t)
+	cutoff := t.UTC().Format("2006-01-02 15:04:05")
+	res, err := x.ExecContext(ctx, query, cutoff)
 	if err != nil {
 		return 0, fmt.Errorf("outbox: purge processed: %w", err)
 	}

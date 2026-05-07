@@ -3,11 +3,13 @@ package postgres
 import (
 	"context"
 	stdsql "database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/enverbisevac/libs/outbox"
+	osql "github.com/enverbisevac/libs/outbox/sql"
 )
 
 // DefaultProcessedTable is the default table name used by ProcessedStore
@@ -15,21 +17,6 @@ import (
 const DefaultProcessedTable = "processed_messages"
 
 var _ outbox.ProcessedStore = (*ProcessedStore)(nil)
-
-// dbtx is the database/sql shape this backend understands. *sql.DB,
-// *sql.Tx and *sql.Conn satisfy it.
-type dbtx interface {
-	ExecContext(ctx context.Context, query string, args ...any) (stdsql.Result, error)
-	QueryRowContext(ctx context.Context, query string, args ...any) *stdsql.Row
-}
-
-func asDBTX(db any) (dbtx, error) {
-	x, ok := db.(dbtx)
-	if !ok {
-		return nil, fmt.Errorf("outbox: unsupported db type %T (want *sql.DB or *sql.Tx)", db)
-	}
-	return x, nil
-}
 
 // ProcessedStore implements outbox.ProcessedStore for PostgreSQL.
 //
@@ -52,8 +39,10 @@ func NewProcessed(tableName string) *ProcessedStore {
 	return &ProcessedStore{table: tableName}
 }
 
+// IsProcessed implements outbox.ProcessedStore. db must satisfy
+// osql.DBTX (e.g. *sql.DB or *sql.Tx).
 func (s *ProcessedStore) IsProcessed(ctx context.Context, db any, group, msgID string) (bool, error) {
-	x, err := asDBTX(db)
+	x, err := osql.AsDBTX(db)
 	if err != nil {
 		return false, err
 	}
@@ -72,8 +61,13 @@ func (s *ProcessedStore) IsProcessed(ctx context.Context, db any, group, msgID s
 	return true, nil
 }
 
-func (s *ProcessedStore) MarkProcessed(ctx context.Context, db any, group, msgID string, metadata []byte) (bool, error) {
-	x, err := asDBTX(db)
+// MarkProcessed implements outbox.ProcessedStore. Non-empty metadata must
+// be valid JSON; invalid input is rejected before the INSERT runs.
+func (s *ProcessedStore) MarkProcessed(ctx context.Context, db any, group, msgID string, metadata json.RawMessage) (bool, error) {
+	if len(metadata) > 0 && !json.Valid(metadata) {
+		return false, fmt.Errorf("outbox: mark processed: metadata is not valid JSON")
+	}
+	x, err := osql.AsDBTX(db)
 	if err != nil {
 		return false, err
 	}
@@ -84,7 +78,7 @@ ON CONFLICT (group_name, message_id) DO NOTHING`,
 		s.table,
 	)
 	var meta any
-	if metadata != nil {
+	if len(metadata) > 0 {
 		meta = string(metadata)
 	}
 	res, err := x.ExecContext(ctx, query, group, msgID, meta)
@@ -98,8 +92,9 @@ ON CONFLICT (group_name, message_id) DO NOTHING`,
 	return n > 0, nil
 }
 
+// PurgeProcessedBefore implements outbox.ProcessedStore.
 func (s *ProcessedStore) PurgeProcessedBefore(ctx context.Context, db any, t time.Time) (int64, error) {
-	x, err := asDBTX(db)
+	x, err := osql.AsDBTX(db)
 	if err != nil {
 		return 0, err
 	}
