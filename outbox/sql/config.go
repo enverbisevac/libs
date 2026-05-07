@@ -44,6 +44,11 @@ func (f OptionFunc) Apply(config *Config) {
 }
 
 // WithTableName sets the outbox table name.
+//
+// Pass an unqualified name — the migration DDL derives index names from
+// this value (idx_<table>_pending), and a dotted "schema.table" produces
+// an invalid identifier. For Postgres, set the schema via the
+// connection's search_path; SQLite has no schemas.
 func WithTableName(s string) Option {
 	return OptionFunc(func(c *Config) {
 		if s != "" {
