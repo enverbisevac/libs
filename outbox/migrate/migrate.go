@@ -27,6 +27,15 @@ func SQL(ctx context.Context, db osql.Execer, driver, tableName string) error {
 	return sqlite.Migrate(ctx, db, tableName)
 }
 
+// ProcessedSQL creates the processed_messages dedup table appropriate for
+// driver. Mirror of SQL for the consumer-side outbox.ProcessedStore.
+func ProcessedSQL(ctx context.Context, db osql.Execer, driver, tableName string) error {
+	if isPostgres(driver) {
+		return postgres.MigrateProcessed(ctx, db, tableName)
+	}
+	return sqlite.MigrateProcessed(ctx, db, tableName)
+}
+
 // isPostgres returns true for the canonical postgres driver names
 // registered by lib/pq ("postgres") and jackc/pgx-stdlib ("pgx").
 func isPostgres(driver string) bool {
