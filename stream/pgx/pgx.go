@@ -23,9 +23,39 @@ import (
 var Schema string
 
 // Apply executes the embedded schema against pool. Idempotent.
+//
+// Boot-fast path: a single to_regclass('stream_messages') probe checks
+// whether the canonical table already exists. The CREATE statements
+// inside Schema are all IF NOT EXISTS, but each still walks pg_class
+// and takes a brief share lock — adding up to a measurable hit on
+// every process start when nothing has actually changed.
+//
+// Schema-monotonicity assumption: if stream_messages is present we
+// skip the entire schema, so new indexes/columns added in a later
+// release will not be applied to existing installs by this function.
+// When the schema evolves, ship the change through a separately named
+// migration (e.g. ApplyV2) and invoke both at startup.
 func Apply(ctx context.Context, pool *pgxpool.Pool) error {
+	if exists, err := tableExists(ctx, pool, "stream_messages"); err == nil && exists {
+		return nil
+	}
 	_, err := pool.Exec(ctx, Schema)
 	return err
+}
+
+// tableExists asks Postgres whether name resolves to a relation in the
+// current search_path. to_regclass returns NULL when the relation does
+// not exist; pgx surfaces that as a NULL OID we can detect via
+// sql.NullInt64.
+func tableExists(ctx context.Context, pool *pgxpool.Pool, name string) (bool, error) {
+	var oid sql.NullInt64
+	if err := pool.QueryRow(ctx, `SELECT to_regclass($1)::oid`, name).Scan(&oid); err != nil {
+		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, pgx5.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return oid.Valid, nil
 }
 
 // ErrClosed is returned by Publish or Subscribe after Close.

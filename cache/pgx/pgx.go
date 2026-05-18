@@ -140,18 +140,48 @@ func NewStdLib[K ~string, V any](ctx context.Context, db *sql.DB, opts ...Option
 	return c, nil
 }
 
+// createTable provisions the cache table and its expiry index. The two
+// CREATE statements run as a single multi-statement Exec so they share
+// one network round-trip — Postgres will parse and run them in order.
+//
+// On already-migrated databases the work is pure overhead: each
+// CREATE ... IF NOT EXISTS still locks pg_class and walks the system
+// catalog. A to_regclass($1) probe is one cheap catalog read with no
+// locking, so we short-circuit when the table is already present.
+//
+// Monotonic-schema assumption: this fast-path means new columns or
+// indexes added in a future version of this package would not be
+// applied to an existing install. If the schema evolves, expose the
+// new objects through a separately named migration function rather
+// than mutating this one, and call both at startup.
 func (c *Cache[K, V]) createTable(ctx context.Context) error {
-	tableQuery := `CREATE UNLOGGED TABLE IF NOT EXISTS ` + c.tableName + ` (
+	if exists, err := c.tableExists(ctx, c.tableName); err == nil && exists {
+		return nil
+	}
+
+	ddl := `CREATE UNLOGGED TABLE IF NOT EXISTS ` + c.tableName + ` (
 		key TEXT PRIMARY KEY,
 		value BYTEA NOT NULL,
 		expiry TIMESTAMPTZ NOT NULL
-	)`
-	indexQuery := `CREATE INDEX IF NOT EXISTS ` + c.tableName + `_expiry_idx ON ` + c.tableName + ` (expiry)`
+	);
+	CREATE INDEX IF NOT EXISTS ` + c.tableName + `_expiry_idx ON ` + c.tableName + ` (expiry);`
 
-	if err := c.exec(ctx, tableQuery); err != nil {
-		return err
+	return c.exec(ctx, ddl)
+}
+
+// tableExists reports whether name resolves to a relation in the
+// current search_path. to_regclass returns NULL (no rows) when the
+// relation does not exist; other errors are surfaced so the caller can
+// fall back to running the DDL.
+func (c *Cache[K, V]) tableExists(ctx context.Context, name string) (bool, error) {
+	var oid sql.NullInt64
+	if err := c.queryRow(ctx, `SELECT to_regclass($1)::oid`, name).Scan(&oid); err != nil {
+		if isNotFound(err) {
+			return false, nil
+		}
+		return false, err
 	}
-	return c.exec(ctx, indexQuery)
+	return oid.Valid, nil
 }
 
 func (c *Cache[K, V]) startCleanup() {
