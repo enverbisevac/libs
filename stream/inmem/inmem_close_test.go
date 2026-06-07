@@ -55,3 +55,44 @@ func TestServiceClose_StopsAllConsumers(t *testing.T) {
 	// Idempotent.
 	require.NoError(t, svc.Close(ctx))
 }
+
+// TestCloseHonorsContext verifies Service.Close bounds an in-flight handler
+// drain by the caller's ctx, not the (much larger) per-consumer
+// ShutdownTimeout. Mirrors the sqlite backend's contract fix.
+func TestCloseHonorsContext(t *testing.T) {
+	svc := inmem.New()
+	ctx := context.Background()
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	defer close(release) // let the wedged handler unwind after assertions
+
+	_, err := svc.Subscribe(ctx, "evt", "g",
+		func(_ context.Context, _ *stream.Message) error {
+			close(started)
+			<-release // block like a wedged handler, ignoring ctx
+			return nil
+		},
+		stream.WithStartFrom(stream.StartEarliest),
+		stream.WithPollInterval(2*time.Millisecond),
+		stream.WithShutdownTimeout(30*time.Second),
+	)
+	require.NoError(t, err)
+	require.NoError(t, svc.Publish(ctx, "evt", []byte("x")))
+
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("handler never reached in-flight state")
+	}
+
+	cctx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	err = svc.Close(cctx)
+	elapsed := time.Since(start)
+
+	require.Less(t, elapsed, 5*time.Second, "Close must honor ctx, not wait the 30s ShutdownTimeout")
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	t.Logf("Close returned in %v with %v (ShutdownTimeout was 30s)", elapsed.Round(time.Millisecond), err)
+}

@@ -62,12 +62,9 @@ func (s *Service) Close(ctx context.Context) error {
 	s.consumers = nil
 	s.mu.Unlock()
 	for _, c := range consumers {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		_ = c.Close()
+		_ = c.closeWithCtx(ctx)
 	}
-	return nil
+	return ctx.Err()
 }
 
 // Publish sends a message via XADD. The payload is stored under the
@@ -164,22 +161,12 @@ func (s *Service) Subscribe(ctx context.Context, name, group string, h stream.Ha
 		handler: h,
 		ctx:     cctx,
 		cancel:  cancel,
+		drained: make(chan struct{}),
 	}
 	c.wg.Add(scfg.Concurrency)
 	for i := range scfg.Concurrency {
 		consumerName := fmt.Sprintf("%s-%d", group, i)
 		go c.worker(consumerName)
-	}
-
-	c.closeFn = func() error {
-		c.cancel()
-		drained := make(chan struct{})
-		go func() { c.wg.Wait(); close(drained) }()
-		select {
-		case <-drained:
-		case <-time.After(c.cfg.ShutdownTimeout):
-		}
-		return nil
 	}
 
 	// Register the consumer under the lock and re-check closed: if Close
@@ -255,6 +242,9 @@ func (c *consumer) worker(consumerName string) {
 			continue
 		}
 		for _, p := range batch {
+			if c.ctx.Err() != nil {
+				return
+			}
 			c.runOne(p)
 		}
 	}
@@ -431,17 +421,37 @@ type consumer struct {
 	wg     sync.WaitGroup
 
 	closeOnce sync.Once
-	closeFn   func() error
+	drained   chan struct{} // closed once the worker WaitGroup drains
 }
 
+// Close drains in-flight work, bounded by the consumer's ShutdownTimeout.
+// Idempotent and safe for concurrent callers.
 func (c *consumer) Close() error {
-	var err error
+	return c.closeWithCtx(context.Background())
+}
+
+// closeWithCtx is Close additionally bounded by ctx: Service.Close threads its
+// caller-supplied deadline here so a shutdown ctx cuts an in-flight handler
+// drain short, on top of the per-consumer ShutdownTimeout cap. The cancel +
+// drain is started exactly once (startDrain); each caller then waits on its
+// own ctx/timeout against the shared drained channel.
+func (c *consumer) closeWithCtx(ctx context.Context) error {
+	c.startDrain()
+	select {
+	case <-c.drained:
+	case <-ctx.Done():
+	case <-time.After(c.cfg.ShutdownTimeout):
+	}
+	return nil
+}
+
+// startDrain cancels the worker ctx and spawns the goroutine that closes
+// c.drained once the workers exit. Runs at most once.
+func (c *consumer) startDrain() {
 	c.closeOnce.Do(func() {
-		if c.closeFn != nil {
-			err = c.closeFn()
-		}
+		c.cancel()
+		go func() { c.wg.Wait(); close(c.drained) }()
 	})
-	return err
 }
 
 var _ stream.Service = (*Service)(nil)
