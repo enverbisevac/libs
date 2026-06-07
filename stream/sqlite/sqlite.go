@@ -54,9 +54,12 @@ func New(db *sql.DB, opts ...stream.ServiceOption) *Service {
 	}
 }
 
-// Close shuts down all consumers. Idempotent. ctx bounds the overall
-// close: cancellation aborts before the next consumer is drained and
-// returns ctx.Err() — already-drained consumers stay drained.
+// Close shuts down all consumers. Idempotent. ctx bounds the overall close:
+// it is threaded into each consumer's in-flight drain so a deadline cuts a
+// stuck handler short rather than waiting the full per-consumer
+// ShutdownTimeout. Every consumer is still cancelled (none orphaned) even once
+// the deadline passes — late consumers just return immediately after firing
+// their cancel. Returns ctx.Err() if the deadline was hit, nil otherwise.
 func (s *Service) Close(ctx context.Context) error {
 	s.mu.Lock()
 	if s.closed {
@@ -68,12 +71,9 @@ func (s *Service) Close(ctx context.Context) error {
 	s.consumers = nil
 	s.mu.Unlock()
 	for _, c := range consumers {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		_ = c.Close()
+		_ = c.closeWithCtx(ctx)
 	}
-	return nil
+	return ctx.Err()
 }
 
 // Publish appends a message to the stream. After insert, signals any
@@ -189,23 +189,12 @@ func (s *Service) Subscribe(ctx context.Context, name, group string, h stream.Ha
 		handler: h,
 		ctx:     cctx,
 		cancel:  cancel,
+		drained: make(chan struct{}),
 	}
 	c.wg.Add(scfg.Concurrency)
 	for i := range scfg.Concurrency {
 		consumerName := fmt.Sprintf("%s-%d", group, i)
 		go c.worker(consumerName)
-	}
-
-	c.closeFn = func() error {
-		c.cancel()
-		s.signal(c.stream) // wake any worker parked on the channel
-		drained := make(chan struct{})
-		go func() { c.wg.Wait(); close(drained) }()
-		select {
-		case <-drained:
-		case <-time.After(c.cfg.ShutdownTimeout):
-		}
-		return nil
 	}
 
 	// Register the consumer under the lock and re-check closed: if Close
@@ -282,17 +271,40 @@ type consumer struct {
 	wg     sync.WaitGroup
 
 	closeOnce sync.Once
-	closeFn   func() error
+	drained   chan struct{} // closed once the worker WaitGroup drains
 }
 
+// Close drains in-flight work, bounded by the consumer's ShutdownTimeout.
+// Idempotent and safe for concurrent callers.
 func (c *consumer) Close() error {
-	var err error
+	return c.closeWithCtx(context.Background())
+}
+
+// closeWithCtx is Close additionally bounded by ctx: Service.Close threads its
+// caller-supplied deadline here so a shutdown ctx cuts an in-flight handler
+// drain short, on top of the per-consumer ShutdownTimeout cap. The cancel +
+// WaitGroup drain is started exactly once (startDrain); each caller then waits
+// on its own ctx/timeout against the shared drained channel, so a
+// deadline-bound caller is never held hostage to a concurrent Background Close
+// already parked in the drain (which sync.Once-gating the wait would cause).
+func (c *consumer) closeWithCtx(ctx context.Context) error {
+	c.startDrain()
+	select {
+	case <-c.drained:
+	case <-ctx.Done():
+	case <-time.After(c.cfg.ShutdownTimeout):
+	}
+	return nil
+}
+
+// startDrain cancels the worker ctx, wakes parked workers, and spawns the
+// goroutine that closes c.drained once the workers exit. Runs at most once.
+func (c *consumer) startDrain() {
 	c.closeOnce.Do(func() {
-		if c.closeFn != nil {
-			err = c.closeFn()
-		}
+		c.cancel()
+		c.svc.signal(c.stream) // wake any worker parked on the channel
+		go func() { c.wg.Wait(); close(c.drained) }()
 	})
-	return err
 }
 
 var _ stream.Service = (*Service)(nil)
@@ -415,6 +427,9 @@ func (c *consumer) worker(consumerName string) {
 		}
 		if len(batch) > 0 {
 			for _, p := range batch {
+				if c.ctx.Err() != nil {
+					return
+				}
 				c.runOne(p)
 			}
 			continue
