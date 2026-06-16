@@ -2,332 +2,140 @@ package openapi
 
 import (
 	"net/http"
+	"reflect"
 
 	"github.com/enverbisevac/libs/errors"
 	"github.com/enverbisevac/libs/httputil"
 	"github.com/go-chi/chi/v5"
 )
 
-type HandleFunc1[H any, S Success] func(ctx Context, in H) (*S, error)
+// None is a marker type indicating "not applicable" for a type parameter.
+type None struct{}
 
-func (f HandleFunc1[H, S]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	var header H
+var noneType = reflect.TypeOf(None{})
 
-	encoder, _ := GetEncDec(w, r)
-
-	decode := httputil.NewDecoder(httputil.PathValue(chi.URLParam)).Decode
-
-	err := decode(r, &header)
-	if err != nil {
-		errors.Response(encoder, w, err)
-		return
-	}
-
-	status, err := f(Context{
-		Request: r,
-	}, header)
-	if err != nil {
-		errors.Response(encoder, w, err)
-		return
-	}
-
-	EncodeResponse(w, encoder, nil, status)
+// Req is a unified request type. H holds path/query/header params, B holds the request body.
+// Use None for B when there is no request body.
+type Req[H any, B any] struct {
+	Header H
+	Body   B
 }
 
-func NewOp1[H any, S Success](
-	handler HandleFunc1[H, S],
-	options ...OperationFunc,
-) *Operation {
-	args := make([]OperationFunc, len(options))
-	copy(args, options)
-	args = append(
-		args,
-		WithHeader(new(H)),
-		WithResponse(
-			GetStatus(new(S)), nil,
-		),
-	)
-	return Handle(
-		handler,
-		args...,
-	)
+// Resp is a unified response type. S determines the HTTP status code, B holds the response body.
+// Use None for B when there is no response body. Response headers can be set via Header.
+type Resp[S Success, B any] struct {
+	Header http.Header
+	Status S
+	Body   B
 }
 
-type HandleFunc2[H, B any, S Success] func(ctx Context, in Request[H, B]) (*S, error)
+// HandlerFunc is the single handler signature for all operations.
+type HandlerFunc[H, B any, S Success, R any] func(ctx Context, req Req[H, B]) (*Resp[S, R], error)
 
-func (f HandleFunc2[H, B, S]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	var header H
-	var body B
-
-	encoder, _ := GetEncDec(w, r)
-
-	decode := httputil.NewDecoder(httputil.PathValue(chi.URLParam)).Decode
-
-	err := decode(r, &header)
-	if err != nil {
-		errors.Response(encoder, w, err)
-		return
-	}
-
-	status, err := f(Context{
-		Request: r,
-	}, Request[H, B]{
-		Header: header,
-		Body:   body,
-	})
-	if err != nil {
-		errors.Response(encoder, w, err)
-		return
-	}
-
-	EncodeResponse(w, encoder, nil, status)
-}
-
-func NewOp2[H, B any, S Success](
-	handler HandleFunc2[H, B, S],
-	options ...OperationFunc,
-) *Operation {
-	args := make([]OperationFunc, len(options))
-	copy(args, options)
-	args = append(
-		args,
-		WithHeader(new(H)),
-		WithRequest(new(B)),
-		WithResponse(
-			GetStatus(new(S)), nil,
-		),
-	)
-	return Handle(
-		handler,
-		args...,
-	)
-}
-
-type HandleFunc3[H, B, R any, S Success] func(ctx Context, in Request[H, B], out *R) (*S, error)
-
-func (f HandleFunc3[H, B, R, S]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	var header H
-	var body B
-
+func (f HandlerFunc[H, B, S, R]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	encoder, decoder := GetEncDec(w, r)
 
-	err := DecodeRequest(r, decoder, &body, &header)
-	if err != nil {
-		errors.Response(encoder, w, err)
-		return
-	}
+	var req Req[H, B]
 
-	var value R
-	status, err := f(Context{
-		Request: r,
-	}, Request[H, B]{
-		Header: header,
-		Body:   body,
-	}, &value)
-	if err != nil {
-		errors.Response(encoder, w, err)
-		return
-	}
-
-	EncodeResponse(w, encoder, &value, status)
-}
-
-// NewOp3 define new operation with
-// H path, query and header fields
-// B request Body
-// R response Body
-// S if no err return from handler then return success
-func NewOp3[H, B, R any, S Success](
-	handler HandleFunc3[H, B, R, S],
-	options ...OperationFunc,
-) *Operation {
-	args := make([]OperationFunc, len(options))
-	copy(args, options)
-	args = append(
-		args,
-		WithHeader(new(H)),
-		WithRequest(new(B)),
-		WithResponse(
-			GetStatus(new(S)), new(R),
-		),
-	)
-	return Handle(
-		handler,
-		args...,
-	)
-}
-
-type HandleFunc4[H, V any, S Success] func(ctx Context, in H, out *V) (*S, error)
-
-func (f HandleFunc4[H, V, R]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	var header H
-
-	encoder, _ := GetEncDec(w, r)
-
+	// Decode path/query/header params
 	decode := httputil.NewDecoder(httputil.PathValue(chi.URLParam)).Decode
-
-	err := decode(r, &header)
+	err := decode(r, &req.Header)
 	if err != nil {
 		errors.Response(encoder, w, err)
 		return
 	}
 
-	var value V
-	status, err := f(Context{
-		Request: r,
-	}, header, &value)
+	// Decode request body if B is not None
+	if reflect.TypeOf((*B)(nil)).Elem() != noneType {
+		err = decoder.Decode(&req.Body)
+		if err != nil {
+			errors.Response(encoder, w, err)
+			return
+		}
+	}
+
+	resp, err := f(Context{Request: r}, req)
 	if err != nil {
 		errors.Response(encoder, w, err)
 		return
 	}
 
-	EncodeResponse(w, encoder, &value, status)
-}
-
-// NewOp4 define new operation with
-// H path, query and header fields
-// R response Body
-// S if no err return from handler then return success
-// This usable in GET requests.
-func NewOp4[H, R any, S Success](
-	handler HandleFunc4[H, R, S],
-	options ...OperationFunc,
-) *Operation {
-	args := make([]OperationFunc, len(options))
-	copy(args, options)
-	args = append(
-		args,
-		WithHeader(new(H)),
-		WithResponse(
-			GetStatus(new(S)), new(R),
-		),
-	)
-	return Handle(
-		handler,
-		args...,
-	)
-}
-
-type HandleFunc5[H, B any] func(ctx Context, in Request[H, B]) (*NoContent, error)
-
-func (f HandleFunc5[H, B]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	var header H
-	var body B
-
-	encoder, decoder := GetEncDec(w, r)
-
-	err := DecodeRequest(r, decoder, &body, &header)
-	if err != nil {
-		errors.Response(encoder, w, err)
-		return
+	// Write response headers
+	if resp.Header != nil {
+		for k, v := range resp.Header {
+			for _, val := range v {
+				w.Header().Add(k, val)
+			}
+		}
 	}
 
-	status, err := f(Context{
-		Request: r,
-	}, Request[H, B]{
-		Header: header,
-		Body:   body,
-	})
-	if err != nil {
-		errors.Response(encoder, w, err)
-		return
+	// Write status code
+	stat, ok := any(resp.Status).(HttpStatus)
+	if ok {
+		w.WriteHeader(stat.HttpStatus())
+		if stat.HttpStatus() == http.StatusNoContent {
+			return
+		}
 	}
 
-	EncodeResponse(w, encoder, nil, status)
+	// Encode response body if R is not None
+	if reflect.TypeOf((*R)(nil)).Elem() != noneType {
+		err = encoder.Encode(resp.Body)
+		if err != nil {
+			errors.Response(encoder, w, err)
+		}
+	}
 }
 
-// NewOp5 define new operation with
-// H path, query and header fields
-// R response Body
-// S if no err return from handler then return success
-// This usable in GET requests.
-func NewOp5[H, B any](
-	handler HandleFunc5[H, B],
-	options ...OperationFunc,
+// Op creates an Operation from a unified HandlerFunc and a Meta config.
+func Op[H, B any, S Success, R any](
+	handler HandlerFunc[H, B, S, R],
+	meta Meta,
 ) *Operation {
-	args := make([]OperationFunc, len(options))
-	copy(args, options)
-	args = append(
-		args,
-		WithHeader(new(H)),
-		WithRequest(new(B)),
-		WithResponse(
-			GetStatus(&NoContent{}), nil,
-		),
-	)
-	return Handle(
-		handler,
-		args...,
-	)
-}
+	op := &Operation{
+		Handler:     handler,
+		ID:          meta.ID,
+		Summary:     meta.Summary,
+		Description: meta.Description,
+		Tags:        meta.Tags,
+		Errors:      meta.Errors,
+		Security:    meta.Security,
+		handlers:    meta.Middleware,
+		Responses:   make(map[int]any),
+	}
 
-func Security(operation *Operation, s ...string) *Operation {
-	operation.Security = s
-	return operation
-}
+	if op.ID == "" {
+		op.ID = nameOf(handler)
+	}
 
-func Handlers(operation *Operation, fn ...func(http.Handler) http.Handler) *Operation {
-	operation.handlers = fn
-	return operation
-}
+	// Always register header struct
+	op.Header = new(H)
 
-func GetHandler[H, V any, S Success](
-	handler HandleFunc4[H, V, S],
-	id string,
-	summary string,
-	tags []string,
-) *Operation {
-	return NewOp4(
-		handler,
-		WithID(id),
-		WithSummary(summary),
-		WithTags(tags...),
-		WithErrors(
-			new(errors.UnauthenticatedError),
-			new(errors.UnauthorizedError),
-			new(errors.NotFoundError),
-			new(errors.InternalError),
-		),
-	)
-}
+	// Register request body if B is not None
+	if reflect.TypeOf((*B)(nil)).Elem() != noneType {
+		op.Request = new(B)
+	}
 
-func PutHandler[H, B, V any, S Success](
-	handler HandleFunc3[H, B, V, S],
-	id string,
-	summary string,
-	tags []string,
-) *Operation {
-	return NewOp3(
-		handler,
-		WithID(id),
-		WithSummary(summary),
-		WithTags(tags...),
-		WithErrors(
-			new(errors.ValidationError),
-			new(errors.UnauthenticatedError),
-			new(errors.UnauthorizedError),
-			new(errors.NotFoundError),
-			new(errors.InternalError),
-		),
-	)
-}
+	// Register response with status from S, body from R (nil if None)
+	var respBody any
+	if reflect.TypeOf((*R)(nil)).Elem() != noneType {
+		respBody = new(R)
+	}
+	op.Responses[GetStatus(new(S))] = respBody
 
-func DeleteHandler[T any, S Success](
-	handler HandleFunc1[T, S],
-	id string,
-	summary string,
-	tags []string,
-) *Operation {
-	return NewOp1(
-		handler,
-		WithID(id),
-		WithSummary(summary),
-		WithTags(tags...),
-		WithErrors(
-			new(errors.UnauthenticatedError),
-			new(errors.UnauthorizedError),
-			new(errors.NotFoundError),
-			new(errors.InternalError),
-		),
-	)
+	// Register error response schemas
+	for _, err := range meta.Errors {
+		if resp, ok := err.(HttpResponse); ok {
+			op.Responses[resp.HttpResponse().Status] = err
+		}
+	}
+
+	// Apply middleware chain
+	chain := make([]httputil.Constructor, len(meta.Middleware))
+	for i, fn := range meta.Middleware {
+		chain[i] = httputil.Constructor(fn)
+	}
+	op.Handler = httputil.NewChain(chain...).Then(op.Handler)
+
+	return op
 }
