@@ -456,3 +456,36 @@ func TestDetails(t *testing.T) {
 		})
 	}
 }
+
+// Both used to test for *ValidationError, so they answered true for a
+// validation failure and false for the error they are named after.
+func TestIsUnauthenticatedAndUnauthorized(t *testing.T) {
+	tests := []struct {
+		name            string
+		err             error
+		unauthenticated bool
+		unauthorized    bool
+	}{
+		{"unauthenticated", Unauthenticated("check your PIN"), true, false},
+		{"wrapped unauthenticated", fmt.Errorf("login: %w", Unauthenticated("check your PIN")), true, false},
+		{"unauthorized", Unauthorized("admins only"), false, true},
+		{"wrapped unauthorized", fmt.Errorf("delete: %w", Unauthorized("admins only")), false, true},
+		{"validation", Validation("name is required"), false, false},
+		{"plain", errors.New("boom"), false, false},
+		{"nil", nil, false, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsUnauthenticated(tt.err); got != tt.unauthenticated {
+				t.Errorf("IsUnauthenticated() = %v, want %v", got, tt.unauthenticated)
+			}
+			if got := IsUnauthorized(tt.err); got != tt.unauthorized {
+				t.Errorf("IsUnauthorized() = %v, want %v", got, tt.unauthorized)
+			}
+		})
+	}
+
+	if uerr, ok := AsUnauthenticated(Unauthenticated("check your PIN")); !ok || uerr.Error() != "check your PIN" {
+		t.Errorf("AsUnauthenticated() = %v, %v", uerr, ok)
+	}
+}

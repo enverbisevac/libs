@@ -543,16 +543,21 @@ func (e *UnauthenticatedError) HttpResponse() HttpResponse {
 	}
 }
 
-func AsUnautenticated(err error) (verr *ValidationError, b bool) {
-	if errors.As(err, &verr) {
-		return verr, true
+func AsUnauthenticated(err error) (uerr *UnauthenticatedError, b bool) {
+	if errors.As(err, &uerr) {
+		return uerr, true
 	}
 
 	return nil, false
 }
 
+// Deprecated: misspelled; use AsUnauthenticated.
+func AsUnautenticated(err error) (*UnauthenticatedError, bool) {
+	return AsUnauthenticated(err)
+}
+
 func IsUnauthenticated(err error) bool {
-	_, ok := AsUnautenticated(err)
+	_, ok := AsUnauthenticated(err)
 	return ok
 }
 
@@ -585,9 +590,9 @@ func (e *UnauthorizedError) ErrorDetails() string {
 	return e.Error()
 }
 
-func AsUnauthorized(err error) (verr *ValidationError, b bool) {
-	if errors.As(err, &verr) {
-		return verr, true
+func AsUnauthorized(err error) (uerr *UnauthorizedError, b bool) {
+	if errors.As(err, &uerr) {
+		return uerr, true
 	}
 
 	return nil, false
