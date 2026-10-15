@@ -603,6 +603,10 @@ func IsUnauthorized(err error) bool {
 	return ok
 }
 
+// Details returns err with its message replaced by the typed error's
+// ErrorDetails, for showing to a caller. The original stays reachable through
+// errors.Is and errors.As, so a caller can still tell a validation failure
+// from a fault.
 func Details(err error) error {
 	if err == nil {
 		return nil
@@ -613,49 +617,49 @@ func Details(err error) error {
 	var ve *ValidationError
 	ok = errors.As(err, &ve)
 	if ok {
-		return errors.New(ve.ErrorDetails())
+		return &detailedError{msg: ve.ErrorDetails(), err: err}
 	}
 
 	var ce *ConflictError
 	ok = errors.As(err, &ce)
 	if ok {
-		return errors.New(ce.ErrorDetails())
+		return &detailedError{msg: ce.ErrorDetails(), err: err}
 	}
 
 	var ne *NotFoundError
 	ok = errors.As(err, &ne)
 	if ok {
-		return errors.New(ne.ErrorDetails())
+		return &detailedError{msg: ne.ErrorDetails(), err: err}
 	}
 
 	var ie *InternalError
 	ok = errors.As(err, &ie)
 	if ok {
-		return errors.New(ie.ErrorDetails())
+		return &detailedError{msg: ie.ErrorDetails(), err: err}
 	}
 
 	var nie *NotImplementedError
 	ok = errors.As(err, &nie)
 	if ok {
-		return errors.New(nie.ErrorDetails())
+		return &detailedError{msg: nie.ErrorDetails(), err: err}
 	}
 
 	var pe *PreconditionFailedError
 	ok = errors.As(err, &pe)
 	if ok {
-		return errors.New(pe.ErrorDetails())
+		return &detailedError{msg: pe.ErrorDetails(), err: err}
 	}
 
 	var ue *UnauthenticatedError
 	ok = errors.As(err, &ue)
 	if ok {
-		return errors.New(ue.ErrorDetails())
+		return &detailedError{msg: ue.ErrorDetails(), err: err}
 	}
 
 	var aue *UnauthorizedError
 	ok = errors.As(err, &aue)
 	if ok {
-		return errors.New(aue.ErrorDetails())
+		return &detailedError{msg: aue.ErrorDetails(), err: err}
 	}
 
 	return err
@@ -681,3 +685,12 @@ func (me Errors) MarshalJSON() ([]byte, error) {
 
 	return data, nil
 }
+
+type detailedError struct {
+	msg string
+	err error
+}
+
+func (e *detailedError) Error() string { return e.msg }
+
+func (e *detailedError) Unwrap() error { return e.err }

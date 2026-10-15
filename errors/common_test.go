@@ -489,3 +489,32 @@ func TestIsUnauthenticatedAndUnauthorized(t *testing.T) {
 		t.Errorf("AsUnauthenticated() = %v, %v", uerr, ok)
 	}
 }
+
+// Details used to rebuild the error with errors.New, so anything it returned
+// had lost its type: a Wails binding could not tell a wrong PIN from a fault.
+func TestDetailsKeepsType(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		is   func(error) bool
+	}{
+		{"validation", Validation("name is required"), IsValidation},
+		{"wrapped not found", fmt.Errorf("delete: %w", NotFound("booking not found")), IsNotFound},
+		{"conflict", Conflict("already booked"), IsConflict},
+		{"unauthenticated", Unauthenticated("check your PIN"), IsUnauthenticated},
+		{"unauthorized", Unauthorized("admins only"), IsUnauthorized},
+		{"precondition failed", PreconditionFailed("stale"), IsPreconditionFailed},
+		{"not implemented", NotImplemented("later"), IsNotImplemented},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Details(tt.err)
+			if !tt.is(got) {
+				t.Errorf("Details(%v) lost its type", tt.err)
+			}
+			if !errors.Is(got, tt.err) {
+				t.Errorf("errors.Is(Details(err), err) = false")
+			}
+		})
+	}
+}
